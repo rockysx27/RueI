@@ -1,0 +1,13 @@
+.vs/
+UpgradeLog.htm
+UpgradeLog2.htm
+UpgradeLog3.htm
+RueI/bin
+RueI/obj
+_site/
+References/
+packages/
+RueITests/obj
+RueITests/bin
+ruei-debug.txt
+RueIDocFX.dll

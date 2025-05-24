@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<doc>
+	<members>
+		<member name="RueI.Utils.HintBuilding">
+			<example>
+StringBuilder sb = new();
+sb.SetColor(255, 0, 0)
+			</example>
+		</member>
+	</members>
+</doc>

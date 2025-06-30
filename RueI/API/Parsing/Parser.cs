@@ -1,158 +1,588 @@
 ﻿namespace RueI.API.Parsing;
 
-using System;
-using System.Text;
+extern alias mscorlib;
 
-using NorthwoodLib.Pools;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Runtime.CompilerServices;
 
 using RueI.API.Elements;
+using RueI.API.Elements.Parameters;
+using RueI.API.Parsing.Enums;
+using RueI.API.Parsing.Modifications;
+using RueI.API.Parsing.Structs;
 using RueI.Utils;
+using RueI.Utils.Collections;
 using RueI.Utils.Enums;
-using RueI.Utils.Extensions;
 
-public static class Parser
+using static RueI.API.Parsing.Modifications.Modification;
+
+/// <summary>
+/// Parses <see cref="Element"/>s into <see cref="ParsedData"/>.
+/// </summary>
+internal static class Parser
 {
+    // TODO: support tangents and shit by manipulating size
+    private const int AdjustedTagLength = Constants.MaxTagLength - 2; // so we don't count < and =
+
+    private static readonly mscorlib.System.Collections.Generic.Stack<AnimatableFloat> SizeStack = new();
+    private static readonly CumulativeFloat Offset = new();
+
+    private static readonly char[] CharBuffer = new char[Constants.MaxTagLength];
+    private static readonly List<ContentParameter> CurrentParameters = new();
+    private static readonly List<Modification> Modifications = new();
+
+    private static readonly Trie<RichTextTag> TagTrie = new(new[]
+    {
+        ("noparse", RichTextTag.Noparse),
+        ("line-height", RichTextTag.LineHeight),
+        ("voffset", RichTextTag.VOffset),
+        ("size", RichTextTag.Size),
+        ("/noparse", RichTextTag.Noparse),
+        ("/size", RichTextTag.Size),
+        ("/voffset", RichTextTag.VOffset),
+        ("/line-height", RichTextTag.CloseLineHeight),
+    });
+
+    private static readonly Trie<char> ReplacementTrie = new(new[]
+    {
+        ("br", '\n'),
+        ("cr", '\r'),
+        ("nbsp", '\u00a0'), // non breaking space
+        ("zwsp", '\u200b'),
+        ("zwj", '\u00AD'), // zwj
+        ("shy", '\u00AD'),
+    });
+
+    private static string text = null!;
+
+    private static bool noparse;
+    private static bool noparseParsesEscapeSeq;
+    private static bool noparseParsesFormat;
+
+    private static int position = 0;
+
+    private static AnimatableFloat lineHeight = AnimatableFloat.Invalid;
+
+    // TODO: make docs better
+
+    /// <summary>
+    /// Parses an <see cref="Element"/> with the given text.
+    /// </summary>
+    /// <param name="text">The text to parse.</param>
+    /// <param name="element">The <see cref="Element"/> to use for settings.</param>
+    /// <returns>A <see cref="ParsedData"/> representing the parsed version of the element.</returns>
+    [SkipLocalsInit]
     public static ParsedData Parse(string text, Element element)
     {
-        if (text == null)
+        Parser.text = text;
+
+        // TODO: support infinite
+        CurrentParameters.EnsureCapacity(element.ParameterList.Count);
+
+        foreach (ContentParameter parameter in element.ParameterList)
         {
-            throw new ArgumentNullException(nameof(text));
+            CurrentParameters.Add(parameter);
         }
 
-        if (element == null)
+        while (TryGetNext(out char ch))
         {
-            throw new ArgumentNullException(nameof(element));
+            HandleChar(ch);
         }
 
-        ParserContext context = new();
+        // reset afterwards to avoid an unnecessary reset when first calling Parse
+        Reset();
 
-        for (int i = 0; i < text.Length; i++)
+        return new ParsedData(text, Offset, Modifications);
+    }
+
+    private static void Reset()
+    {
+        SizeStack.Clear();
+        Offset.Clear();
+
+        position = 0;
+
+        lineHeight = AnimatableFloat.Invalid;
+
+        CurrentParameters.Clear();
+        Modifications.Clear();
+    }
+
+    private static void HandleChar(char ch)
+    {
+        switch (ch)
         {
-            switch (text[i])
-            {
-                case '<':
-                    ReadOnlySpan<char> span = text[++i..];
-
-                    if (TryParseTag(span, out TagInfo info))
-                    {
-                        i += info.Length - 1; // TODO: check this
-
-                        if ()
-                    }
-
-                    continue;
-                case '\n':
-                    AddNewline();
-                    break;
-
-            }
-
-            if (text[i] == '}')
-            {
-                ReadOnlySpan<char> span = text[++i..];
-
-                TryParseTag(span, out TagInfo _);
-
-                continue;
-            }
-            else if (text[i] == '\n')
-            {
-                AddNewline();
-            }
+            case '<':
+                TryParseTag();
+                break;
+            case '\n':
+                AddLinebreak();
+                break;
         }
     }
 
-    private static bool TryParseTag(ReadOnlySpan<char> span, out TagInfo info)
+    private static bool TryParseTag()
     {
-        var name = span[..16].TakeWhile(TagHelpers.IsTagNameChar); // limit to first 16 characters
+        const int MaxTagNameLength = 15; // stop trying to parse as a tag if the name is too long (</line-height> is 14 characters)
 
-        int pos = name.Length;
-        if (pos != span.Length)
+        int count = 0;
+        int max = position + MaxTagNameLength;
+
+        //// int start = ++position;
+
+        Trie<RichTextTag>.RadixNode? node = TagTrie.Root;
+
+        while (TryGetNext(out char ch) && position < max)
         {
-            char ch = span[pos];
+            RichTextTag tag = node.Value;
 
-            if (ch == '>')
+            if (tag != default)
             {
-                info = new()
+                // quick check to see if tag takes in a parameter
+                if (tag >= RichTextTag.Noparse)
                 {
-                    TagName = name,
-                    Length = pos + 2, // we do + 2 to include both the < and the >
-                };
+                    if (noparse && tag != RichTextTag.CloseNoparse)
+                    {
+                        break;
+                    }
+
+                    switch (ch)
+                    {
+                        case ' ': // space works identical to = for tags that don't take a parameter
+                        case '=':
+                            if (tag == RichTextTag.Noparse)
+                            {
+                                noparse = true;
+                            }
+
+                            while (TryGetNext(out ch))
+                            {
+                                if (++count > Constants.MaxTagLength)
+                                {
+                                    BreakTag();
+
+                                    break;
+                                }
+                                else if (ch == '>')
+                                {
+                                    goto case '>';
+                                }
+                                else if (text[position] == '<' || TryParseFormatItem(out int _))
+                                {
+                                    BreakTag();
+
+                                    break;
+                                }
+                            }
+
+                            if (tag == RichTextTag.Noparse)
+                            {
+                                noparse = false;
+                            }
+
+                            return false;
+                        case '>':
+                            switch (tag)
+                            {
+                                case RichTextTag.CloseSize:
+                                    SizeStack.TryPop(out _);
+                                    break;
+                                case RichTextTag.CloseVOffset:
+                                case RichTextTag.CloseLineHeight:
+                                    lineHeight = AnimatableFloat.Invalid;
+                                    break;
+                                case RichTextTag.Default:
+                                    noparse = true;
+                                    break;
+                                case RichTextTag.CloseNoparse:
+                                    noparse = false;
+                                    break;
+                            }
+
+                            return true;
+                    }
+                }
+                else
+                {
+                    if (ch != '=')
+                    {
+                        HandleChar(ch);
+
+                        return false;
+                    }
+
+                    int pos = position - 1;
+
+                    if (TryParseMeasurements(count, out MeasurementInfo info))
+                    {
+                        switch (tag)
+                        {
+                            case RichTextTag.LineHeight:
+                                lineHeight = info.ToAnimatableFloat(Constants.DefaultLineHeight);
+                                break;
+                            case RichTextTag.Size:
+                                float add = info.AddType != MeasurementInfo.AdditionType.Default && info.Unit == MeasurementUnit.Pixels ? Constants.EmSize : 0;
+                                SizeStack.Push(info.ToAnimatableFloat(Constants.EmSize, add));
+
+                                break;
+                            case RichTextTag.VOffset:
+                                // TODO: support voffset
+                                return false;
+                        }
+                    }
+
+                    position = pos;
+
+                    return false;
+                }
+            }
+
+            if ((node = node[TagHelpers.ToLowercaseFast(ch)]) == null)
+            {
+                HandleChar(ch);
 
                 return true;
             }
-            else if (ch == '=')
-            {
-                pos++;
 
-                ReadOnlySpan<char> tagValue = span.Terminated('>');
-                if (tagValue != ReadOnlySpan<char>.Empty && TryParseNumber(tagValue, out MeasurementInfo measurement))
-                {
-                    pos += tagValue.Length + 1;
-
-                    // pos doesn't include the < (but DOES include the >)
-                    if (pos < Constants.MaxTagLength)
-                    {
-                        info = new()
-                        {
-                            TagName = name,
-                            Measurements = measurement,
-                            Length = pos,
-                        };
-
-                        return true;
-                    }
-                }
-            }
+            position++;
+            count++;
         }
 
-        info = default;
         return false;
     }
 
-    private static bool TryParseNumber(ReadOnlySpan<char> span, out MeasurementInfo info)
+    private static bool TryParseFormatItem(out int num)
     {
-        // TODO: support empty
-        if (span.Length == 0)
+        char cur = text[position];
+
+        if (noparse && !noparseParsesFormat)
         {
-            info = default;
+            switch (cur)
+            {
+                case '{':
+                    Modifications.Add(new Modification(ModificationType.AdditionalForwardBracket, position));
+                    Modifications.Add(new Modification(ModificationType.DoNotBreakFor, position, 2));
+                    num = -1;
+
+                    return true;
+                case '}':
+                    Modifications.Add(new Modification(ModificationType.AdditionalBackwardsBracket, position));
+                    Modifications.Add(new Modification(ModificationType.DoNotBreakFor, position, 2));
+                    num = -1;
+
+                    return true;
+            }
+
+            Unsafe.SkipInit(out num);
             return false;
         }
 
-        int numDecimals = -1; // -1 = no decimal place encountered (not yet adding characters to decimal)
-        int value = 0; // by default, if we have no numbers (e.g. <line-height=>), the value is 0
-        MeasurementUnit unit = MeasurementUnit.Pixels;
-        for (int i = 0; i < span.Length; i++)
+        // TODO: handle singular { or }
+        if (cur == '{')
         {
-            char c = span[i];
-            switch (c)
+            const int MaxNumLength = 5;
+
+            if (MoveNext())
             {
-                case '-' when i == 0:
-                    value = -0;
-                    break;
+                if (text[position] == '{')
+                {
+                    Modifications.Add(new Modification(ModificationType.DoNotBreakFor, position - 1, 2));
 
-                // the way tmp works is that upon encountering a unit character, it immediately starts ignoring
-                // the rest of the characters. thus we break when we encounter one
-                case 'e':
-                    unit = MeasurementUnit.Ems;
-                    goto END_LOOP;
-                case '%':
-                    unit = MeasurementUnit.Percentage;
-                    goto END_LOOP;
-                case 'p':
-                    goto END_LOOP; // default is already pixels, doesn't do anything
-                case '.' when numDecimals == -1:
-                    numDecimals = 0;
-                    break;
-                default:
-                    if (char.IsDigit(c))
+                    num = -1;
+
+                    return true;
+                }
+            }
+            else
+            {
+                num = 0;
+
+                return false;
+            }
+
+            int start = position;
+            int stopAt = Math.Min(text.Length, position + MaxNumLength);
+
+            while (position < stopAt)
+            {
+                if (text[position] == '}')
+                {
+                    int length = position - start;
+
+                    if (int.TryParse(text.AsSpan(start, length), out int result) && result >= 0)
                     {
-                        value *= 10;
-                        value += (int)(c - '0'); // convert e.g. '5' -> 5
-
-                        if (numDecimals > -1)
+                        if (result >= CurrentParameters.Count)
                         {
-                            numDecimals++;
+                            Modifications.Add(new Modification(ModificationType.InvalidFormatItem, start, length));
+                            Modifications.Add(new Modification(ModificationType.DoNotBreakFor, start, length));
+
+                            // doesn't really matter what we do here
+                            Unsafe.SkipInit(out num);
+                            return false;
+                        }
+
+                        Modifications.Add(new Modification(ModificationType.FormatItem, start));
+                        Modifications.Add(new Modification(ModificationType.DoNotBreakFor, start, length));
+                        num = result;
+
+                        return true;
+                    }
+
+                    Unsafe.SkipInit(out num);
+                    return false;
+                }
+
+                position++;
+            }
+        }
+        else if (cur == '}' && MoveNext() && text[position] == '}')
+        {
+            Modifications.Add(new Modification(ModificationType.DoNotBreakFor, position - 1, 2));
+            num = -1;
+
+            return true;
+        }
+
+        Unsafe.SkipInit(out num);
+        return false;
+    }
+
+    private static bool TryParseMeasurements(int count, out MeasurementInfo info)
+    {
+        const MeasurementUnit NotSet = (MeasurementUnit)(-1);
+        MeasurementUnit unit = NotSet;
+
+        MeasurementInfo.AdditionType type;
+
+        int numDigits = 0;
+        int decimalPoint = -1;
+
+        bool comma = false;
+
+        int paramId = -1;
+
+        char ch;
+
+        bool MoveNextMeasurement()
+        {
+            if (TryGetNext(out ch) && ++count < Constants.MaxTagLength)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        if (MoveNextMeasurement())
+        {
+            type = ch switch
+            {
+                '-' => MeasurementInfo.AdditionType.SubtractiveOrNegative,
+                '+' => MeasurementInfo.AdditionType.Additive,
+                _ => MeasurementInfo.AdditionType.Default,
+            };
+        }
+        else
+        {
+            // TODO: fix
+            info = default;
+
+            return true;
+        }
+
+        do
+        {
+            switch (ch)
+            {
+                case '.' when decimalPoint == -1:
+                    decimalPoint = numDigits;
+                    break;
+                case '<':
+                    goto EndLoop;
+                case ',':
+                    comma = true;
+                    break;
+                case '>':
+                    float value = 0;
+
+                    // TODO: check measurement > 32768
+                    if (paramId == -1)
+                    {
+                        value = decimalPoint == -1
+                            ? TagHelpers.FromIntegerAndDecimal(CharBuffer[..numDigits], ReadOnlySpan<char>.Empty)
+                            : TagHelpers.FromIntegerAndDecimal(CharBuffer[..decimalPoint], CharBuffer[decimalPoint..numDigits]);
+                    }
+
+                    info = new()
+                    {
+                        Unit = unit == NotSet ? MeasurementUnit.Pixels : unit,
+                        AddType = type,
+                        ParamId = paramId,
+                        Value = value,
+                    };
+
+                    return true;
+                default:
+                    if (unit == NotSet)
+                    {
+                        switch (ch)
+                        {
+                            case 'e':
+                                unit = MeasurementUnit.Pixels;
+                                break;
+                            case '%':
+                                unit = MeasurementUnit.Percentage;
+                                break;
+                            case ' ':
+                            case 'p':
+                                unit = MeasurementUnit.Pixels;
+                                break;
+                        }
+                    }
+                    else if (TryParseFormatItem(out int num))
+                    {
+                        if (num == -1) // escape sequence, e.g. {{ -> add additional
+                        {
+                            count++;
+                        }
+                        else
+                        {
+                            // TODO: remove this huge ass check
+                            if (paramId != -1 || unit != NotSet || decimalPoint != -1 || numDigits != -1 || comma || CurrentParameters[paramId] is not AnimatedParameter)
+                            {
+                                goto EndLoop;
+                            }
+
+                            paramId = num;
+                            decimalPoint = 0; // so we don't also have to check paramId
+                        }
+                    }
+                    else if (TagHelpers.IsDigitFast(ch) && paramId == -1 && !comma)
+                    {
+                        CharBuffer[numDigits++] = ch;
+                    }
+
+                    break;
+            }
+        }
+        while (MoveNextMeasurement());
+
+    EndLoop:
+
+        // TODO: break tag
+        BreakTag();
+
+        info = default;
+
+        return false;
+    }
+
+    private static bool MoveNext() => ++position < text.Length;
+
+    private static bool TryGetNext(out char ch)
+    {
+        if (!MoveNext())
+        {
+            Unsafe.SkipInit(out ch);
+
+            return false;
+        }
+
+        char cur = text[position];
+
+        // we handle <br> tags and other similar tags here since they have special behavior (they act more like escape sequences)
+        if (cur == '<' && !noparse)
+        {
+            Trie<char>.RadixNode? node = ReplacementTrie.Root;
+            int replaceTagPos = position;
+
+            while (replaceTagPos < text.Length)
+            {
+                char replacementCh = text[replaceTagPos];
+
+                if (replacementCh is '=' or ' ' or '>')
+                {
+                    if (node.Value != default)
+                    {
+                        position = replaceTagPos;
+                        ch = node.Value;
+
+                        return true;
+                    }
+
+                    break;
+                }
+
+                if ((node = node[replacementCh]) == null)
+                {
+                    break;
+                }
+
+                replaceTagPos++;
+            }
+
+            ch = '<';
+            return true;
+        }
+
+        if (cur != '\\')
+        {
+            ch = cur;
+
+            return true;
+        }
+
+        if (noparse && !noparseParsesEscapeSeq)
+        {
+            // in noparse and noparse doesn't add escape seq, so add an additional backslash
+            Modifications.Add(new(ModificationType.AdditionalBackslash, position));
+
+            ch = '\\';
+
+            return true;
+        }
+
+        int newPos = position + 1;
+
+        if (newPos < text.Length)
+        {
+            switch (text[newPos])
+            {
+                case '\\': // escaped \, so just advance to next \
+                    position = newPos;
+                    ch = '\\';
+                    return true;
+                case 'v': // vertical tab
+                case 'n': // \n
+                    position = newPos;
+                    ch = '\n';
+                    return true;
+                case 't':
+                    position = newPos;
+                    ch = '\t';
+                    return true;
+                case 'r':
+                    position = newPos;
+                    ch = '\r';
+                    return true;
+                case 'U': // TODO: handle \U
+                    Modifications.Add(new(ModificationType.AdditionalBackslash, position));
+                    ch = '\\';
+                    return true;
+                case 'u':
+                    if (++newPos + 4 < text.Length)
+                    {
+                        if (int.TryParse(text.AsSpan(newPos, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value))
+                        {
+                            // TODO: check
+                            position = newPos + 4;
+                            ch = (char)value;
+
+                            return true;
                         }
                     }
 
@@ -160,44 +590,80 @@ public static class Parser
             }
         }
 
-    END_LOOP: // break out of the loop
-
-        float floatValue = ((float)value) / UnityEngine.Mathf.Pow(value, Math.Min(numDecimals, 0));
-
-        info = new()
-        {
-            Unit = unit,
-            Value = floatValue,
-        };
+        ch = '\\';
 
         return true;
     }
 
-    private char ParseChar(ref ReadOnlySpan<char> span, bool noParse)
+    private static void BreakTag()
     {
-        if (noParse)
+        ModificationType type = noparse ? ModificationType.InsertNoparse : ModificationType.InsertCloseNoparse;
+        Modifications.Add(new Modification(type, position));
+    }
+
+    private static void AddLinebreak()
+    {
+        if (!lineHeight.IsInvalid)
         {
-            if 
+            Offset.Add(in lineHeight);
+        }
+        else if (SizeStack.TryPeek(out AnimatableFloat value))
+        {
+            Offset.Add(in value);
         }
         else
         {
-
+            Offset.Add(Constants.DefaultLineHeight);
         }
-    }
-
-    private struct MeasurementInfo
-    {
-        public MeasurementUnit Unit;
-
-        public float Value;
     }
 
     private ref struct TagInfo
     {
         public ReadOnlySpan<char> TagName;
 
-        public MeasurementInfo? Measurements;
+        public MeasurementInfo? Info;
+    }
 
-        public int Length;
+    private struct MeasurementInfo
+    {
+        public MeasurementUnit Unit;
+
+        public AdditionType AddType;
+
+        public float Value;
+
+        public int ParamId;
+
+        internal enum AdditionType
+        {
+            Default,
+            Additive,
+            SubtractiveOrNegative,
+        }
+
+        public readonly AnimatableFloat ToAnimatableFloat(float pointSize, float add = 0)
+        {
+            float multi = this.AddType == AdditionType.SubtractiveOrNegative ? -1f : 1f;
+
+            if (this.ParamId == -1)
+            {
+                return this.Unit switch
+                {
+                    MeasurementUnit.Percentage => new(((this.Value / 100 * pointSize) + add) * multi),
+                    MeasurementUnit.Ems => new(((this.Value * Constants.EmSize) + add) * multi),
+                    _ => new((this.Value + add) * multi),
+                };
+            }
+            else
+            {
+                bool abs = this.AddType != AdditionType.Default;
+                return this.Unit switch
+                {
+                    MeasurementUnit.Percentage => new(this.ParamId, add, pointSize / 100 * multi, abs),
+                    MeasurementUnit.Ems => new(this.ParamId, add, Constants.EmSize * multi, abs),
+                    _ => new(this.ParamId, add, multi, abs),
+                };
+            }
+        }
     }
 }

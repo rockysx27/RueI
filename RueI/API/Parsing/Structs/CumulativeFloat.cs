@@ -159,7 +159,7 @@ internal struct CumulativeFloat
                 ref readonly AnimatableFloat animatableFloat = ref this.curves[i];
 
                 // write parameter
-                AnimatedParameter param = (AnimatedParameter)parameters[animatableFloat.ParameterId];
+                AnimatedParameter param = (AnimatedParameter)parameters[animatableFloat.ParameterIndex];
                 paramWriter.WriteByte(ElementCombiner.AnimatedParameterID);
                 paramWriter.WriteDouble(param.Offset);
                 paramWriter.WriteString(null);

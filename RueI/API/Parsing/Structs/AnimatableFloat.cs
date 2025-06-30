@@ -1,18 +1,14 @@
 ﻿namespace RueI.API.Parsing.Structs;
 
-using System.Collections.Generic;
-using RueI.API.Elements.Parameters;
-using UnityEngine;
-
 /// <summary>
 /// Represents a float that may have an animated value.
 /// </summary>
 internal struct AnimatableFloat
 {
     /// <summary>
-    /// The parameter id, or <c>-2</c> if there is no parameter.
+    /// The index of the parameter, or <c>-2</c> if there is no parameter.
     /// </summary>
-    internal int ParameterId;
+    internal int ParameterIndex;
 
     /// <summary>
     /// The raw value, or a value to add to the curve (after multiplying).
@@ -35,13 +31,13 @@ internal struct AnimatableFloat
     /// <param name="value">The value to use for the <see cref="AnimatableFloat"/>.</param>
     internal AnimatableFloat(float value)
     {
-        this.ParameterId = -2;
+        this.ParameterIndex = -2;
         this.AddendOrValue = value;
     }
 
-    internal AnimatableFloat(int id, float sum, float multiplier, bool abs)
+    internal AnimatableFloat(int index, float sum, float multiplier, bool abs)
     {
-        this.ParameterId = id;
+        this.ParameterIndex = index;
         this.AddendOrValue = sum;
         this.Multiplier = multiplier;
         this.AbsoluteValue = abs;
@@ -49,7 +45,7 @@ internal struct AnimatableFloat
 
     private AnimatableFloat(int id)
     {
-        this.ParameterId = id;
+        this.ParameterIndex = id;
         this.Multiplier = 1;
     }
 
@@ -61,12 +57,12 @@ internal struct AnimatableFloat
     /// <summary>
     /// Gets a value indicating whether this <see cref="AnimatableFloat"/> is animated.
     /// </summary>
-    public readonly bool IsAnimated => this.ParameterId == -2;
+    public readonly bool IsAnimated => this.ParameterIndex == -2;
 
     /// <summary>
     /// Gets a value indicating whether this <see cref="AnimatableFloat"/> is invalid.
     /// </summary>
-    public readonly bool IsInvalid => this.ParameterId == -1;
+    public readonly bool IsInvalid => this.ParameterIndex == -1;
 
     /// <summary>
     /// Gets the inverse of this <see cref="AnimatableFloat"/>.

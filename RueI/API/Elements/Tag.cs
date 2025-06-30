@@ -29,9 +29,9 @@ public sealed class Tag
     }
 
     /// <summary>
-    /// Gets the ID of this <see cref="Tag"/>, or <see langword="null"/> if this <see cref="Tag"/> was not created with an id.
+    /// Gets the ID of this <see cref="Tag"/>, or <see langword="null"/> if this <see cref="Tag"/> was not created with an ID.
     /// </summary>
-    public string Id { get; }
+    public string? Id { get; }
 
     /// <summary>
     /// Gets the hash code for this <see cref="Tag"/>.
@@ -55,5 +55,5 @@ public sealed class Tag
     {
         // ensure that a null id != null id
         return obj is Tag tag && (tag.Id?.Equals(tag.Id) ?? false || ReferenceEquals(this, obj));
-    }
+    }   
 }

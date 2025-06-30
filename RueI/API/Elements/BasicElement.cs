@@ -1,13 +1,20 @@
 ﻿namespace RueI.API.Elements;
 
+using System;
+
 using RueI.API.Parsing;
 
 /// <summary>
 /// Represents a basic element with fixed text.
 /// </summary>
+/// <remarks>
+/// As its name suggests, the <see cref="BasicElement"/> is a simple element
+/// that is good enough for most use cases. TODO: make this doc better
+/// </remarks>
 public class BasicElement : Element
 {
-    private static ParsedData parsedData;
+    private readonly string content;
+    private ParsedData? parsedData;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BasicElement"/> class.
@@ -17,9 +24,21 @@ public class BasicElement : Element
     public BasicElement(string content, float position)
         : base(position)
     {
-        parsedData = Parser.Parse(content);
+        if (content is null)
+        {
+            throw new ArgumentNullException(nameof(content));
+        }
+
+        this.content = content;
     }
 
     /// <inheritdoc/>
-    protected internal sealed override ParsedData GetParsedData(ReferenceHub hub) => parsedData;
+    protected internal sealed override ParsedData GetParsedData(ReferenceHub hub)
+    {
+        if (!this.parsedData.HasValue)
+        {
+            parsedData = Parser.Parse(content, this);
+            content = null;
+        }
+    }
 }

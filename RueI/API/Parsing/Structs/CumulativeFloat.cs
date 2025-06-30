@@ -1,0 +1,179 @@
+﻿namespace RueI.API.Parsing.Structs;
+
+using System;
+using System.Collections.Generic;
+using Mirror;
+using RueI.API.Elements.Parameters;
+using RueI.Utils.Collections;
+using RueI.Utils.Extensions;
+
+/// <summary>
+/// Represents multiple <see cref="AnimatableFloat"/>s added together.
+/// </summary>
+internal struct CumulativeFloat
+{
+    private StructList<AnimatableFloat> curves = new();
+    private float value;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CumulativeFloat"/> struct.
+    /// </summary>
+    public CumulativeFloat()
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CumulativeFloat"/> struct
+    /// from a given <see langword="float"/>.
+    /// </summary>
+    /// <param name="value">The <see langword="float"/> to initialize the <see cref="CumulativeFloat"/> with.</param>
+    public CumulativeFloat(float value)
+    {
+        this.value = value;
+    }
+
+    /// <summary>
+    /// Gets an invalid <see cref="CumulativeFloat"/>.
+    /// </summary>
+    public static CumulativeFloat Invalid => new()
+    {
+        value = float.NaN,
+    };
+
+    /// <summary>
+    /// Gets a value indicating whether this <see cref="CumulativeFloat"/> is invalid.
+    /// </summary>
+    public readonly bool IsInvalid => float.IsNaN(this.value);
+
+    /// <summary>
+    /// Adds a <see cref="CumulativeFloat"/> to this <see cref="CumulativeFloat"/>.
+    /// </summary>
+    /// <param name="cumulativeFloat">The <see cref="CumulativeFloat"/> to add.</param>
+    public void Add(CumulativeFloat cumulativeFloat)
+    {
+        this.curves.AddList(cumulativeFloat.curves);
+        this.value += cumulativeFloat.value;
+    }
+
+    /// <summary>
+    /// Subtracts a <see cref="CumulativeFloat"/> from this <see cref="CumulativeFloat"/>.
+    /// </summary>
+    /// <param name="cumulativeFloat">The <see cref="CumulativeFloat"/> to subtract.</param>
+    public void Subtract(CumulativeFloat cumulativeFloat)
+    {
+        this.curves.AddCapacity(cumulativeFloat.curves.Length);
+
+        for (int i = 0; i < cumulativeFloat.curves.Length; i++)
+        {
+            ref AnimatableFloat animatableFloat = ref cumulativeFloat.curves[i];
+
+            AnimatableFloat inverse = animatableFloat.Inverse;
+
+            this.Add(in inverse);
+        }
+
+        this.value -= cumulativeFloat.value;
+    }
+
+    public void Add(in AnimatableFloat value)
+    {
+        if (value.IsAnimated)
+        {
+            this.curves.Add(in value);
+        }
+        else
+        {
+            this.value += value.AddendOrValue;
+        }
+    }
+
+    public void Subtract(in AnimatableFloat value)
+    {
+        if (value.IsAnimated)
+        {
+            this.curves.Add(value.Inverse);
+        }
+        else
+        {
+            this.value -= value.AddendOrValue;
+        }
+    }
+
+    /// <summary>
+    /// Adds a <see langword="float"/> to the <see cref="CumulativeFloat"/>.
+    /// </summary>
+    /// <param name="value">The <see langword="float"/> to add.</param>
+    public void Add(float value)
+    {
+        this.value += value;
+    }
+
+    /// <summary>
+    /// Divides all values in the <see cref="CumulativeFloat"/> by a given <see langword="float"/>.
+    /// </summary>
+    /// <param name="value">The <see langword="float"/> to divide by.</param>
+    public void Divide(float value)
+    {
+        for (int i = 0; i < this.curves.Length; i++)
+        {
+            this.curves[i].Multiplier /= value;
+        }
+
+        this.value /= value;
+    }
+
+    /// <summary>
+    /// Multiplies all values in the <see cref="CumulativeFloat"/> by a given <see langword="float"/>.
+    /// </summary>
+    /// <param name="value">The <see langword="float"/> to multiply by.</param>
+    public void Multiply(float value)
+    {
+        for (int i = 0; i < this.curves.Length; i++)
+        {
+            this.curves[i].Multiplier *= value;
+        }
+
+        this.value *= value;
+    }
+
+    /// <summary>
+    /// Clears the <see cref="CumulativeFloat"/>.
+    /// </summary>
+    public void Clear()
+    {
+        this.curves.Clear();
+        this.value = 0;
+    }
+
+    public readonly void WriteAsLineHeight(
+        NetworkWriter writer,
+        NetworkWriter paramWriter,
+        List<ContentParameter> parameters,
+        List<NoBreakInfo> nobreaks,
+        ref int paramIndex)
+    {
+        if (this.curves.Length != 0) // uncommon path
+        {
+            for (int i = 0; i < this.curves.Length; i++)
+            {
+                ref readonly AnimatableFloat animatableFloat = ref this.curves[i];
+
+                // write parameter
+                AnimatedParameter param = (AnimatedParameter)parameters[animatableFloat.ParameterId];
+                paramWriter.WriteByte(ElementCombiner.AnimatedParameterID);
+                paramWriter.WriteDouble(param.Offset);
+                paramWriter.WriteString(null);
+                paramWriter.WriteBool(false);
+                param.Value.WriteTransformed(paramWriter, animatableFloat.Multiplier, animatableFloat.AddendOrValue);
+
+                writer.WriteStringNoSize("<line-height=");
+                writer.WriteFormatItemNoBreak(paramIndex++, nobreaks);
+                writer.WriteStringNoSize(">\n");
+            }
+        }
+
+        writer.WriteStringNoSize("<line-height=");
+        writer.WriteFloatAsString(this.value);
+        writer.WriteStringNoSize(">\n</line-height>");
+    }
+}

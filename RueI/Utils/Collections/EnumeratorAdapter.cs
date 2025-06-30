@@ -1,4 +1,6 @@
-﻿using System;
+﻿namespace RueI.Utils.Collections;
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -7,6 +9,12 @@ using System.Collections.Generic;
 /// </summary>
 /// <typeparam name="TSource">The old type of the enumerator.</typeparam>
 /// <typeparam name="TValue">The type that the adaptor <see cref="IEnumerator{T}"/> should yield.</typeparam>
+/// <remarks>
+/// The <see cref="EnumeratorAdapter{TSource, TValue}"/> can convert a <see cref="IEnumerator{T}"/> yielding
+/// <typeparamref name="TSource"/> to <typeparamref name="TValue"/> using a <see cref="Func{T, TResult}"/>.
+/// Unlike <see cref="System.Linq.Enumerable.Select{TSource, TResult}(IEnumerable{TSource}, Func{TSource, TResult})"/>,
+/// this class does not operate on <see cref="IEnumerable{T}"/>.
+/// </remarks>
 internal sealed class EnumeratorAdapter<TSource, TValue> : IEnumerator<TValue>
 {
     private readonly IEnumerator<TSource> enumerator;
@@ -27,7 +35,7 @@ internal sealed class EnumeratorAdapter<TSource, TValue> : IEnumerator<TValue>
     public TValue Current => this.converter(this.enumerator.Current);
 
     /// <inheritdoc/>
-    object IEnumerator.Current => this.Current;
+    object IEnumerator.Current => this.Current!;
 
     /// <inheritdoc/>
     public void Dispose() => this.enumerator.Dispose();

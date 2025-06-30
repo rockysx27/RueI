@@ -1,6 +1,7 @@
 ﻿namespace RueI.API.Elements;
 
 using System;
+
 using RueI.API.Parsing;
 
 /// <summary>
@@ -17,7 +18,7 @@ public class DynamicElement : Element
     public DynamicElement(Func<ReferenceHub, string> contentGetter, float position)
         : base(position)
     {
-        this.ContentGetter = contentGetter;
+        this.ContentGetter = contentGetter ?? throw new ArgumentNullException(nameof(contentGetter));
     }
 
     /// <summary>
@@ -28,6 +29,11 @@ public class DynamicElement : Element
     public DynamicElement(Func<string> contentGetter, float position)
         : base(position)
     {
+        if (contentGetter == null)
+        {
+            throw new ArgumentNullException(nameof(contentGetter));
+        }
+
         this.ContentGetter = _ => contentGetter();
     }
 
@@ -37,5 +43,5 @@ public class DynamicElement : Element
     protected Func<ReferenceHub, string> ContentGetter { get; }
 
     /// <inheritdoc/>
-    protected internal override ParsedData GetParsedData(ReferenceHub hub) => Parser.Parse(this.ContentGetter(hub));
+    protected internal override ParsedData GetParsedData(ReferenceHub hub) => Parser.Parse(element: this.ContentGetter(hub));
 }

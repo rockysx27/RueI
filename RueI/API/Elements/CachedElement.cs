@@ -25,6 +25,7 @@ internal class CachedElement : DynamicElement
     public CachedElement(Func<string> contentGetter, TimeSpan cacheTime, float position)
         : base(contentGetter, position)
     {
+        this.CacheTime = cacheTime;
     }
 
     /// <summary>
@@ -41,7 +42,7 @@ internal class CachedElement : DynamicElement
         {
             this.timeLeft = (float)this.CacheTime.TotalSeconds;
 
-            return this.cachedParsedData = Parser.Parse(this.ContentGetter(hub));
+            return this.cachedParsedData = Parser.Parse(this.ContentGetter(hub), this);
         }
         else
         {

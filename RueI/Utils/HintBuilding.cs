@@ -1,9 +1,10 @@
 ﻿namespace RueI.Utils;
 
 using System.Drawing;
-using System.Drawing.Printing;
 using System.Text;
+
 using NorthwoodLib.Pools;
+
 using RueI.Utils.Enums;
 
 /// <summary>
@@ -18,7 +19,7 @@ using RueI.Utils.Enums;
 /// </example>
 public static class HintBuilding
 {
-    private const string EMS = "ems";
+    private const string EMS = "e"; // "e" is good enough to indicate that the unit is in ems, and this saves a couple characters
     private const string PERCENT = "%";
 
     /// <summary>
@@ -74,6 +75,16 @@ public static class HintBuilding
     }
 
     /// <summary>
+    /// Converts a <see cref="UnityEngine.Color"/> to a system <see cref="Color"/>.
+    /// </summary>
+    /// <param name="unityColor">The <see cref="UnityEngine.Color"/> to convert.</param>
+    /// <returns>The converted <see cref="Color"/>.</returns>
+    public static Color UnityToSystemColor(UnityEngine.Color unityColor)
+    {
+        return Color.FromArgb((int)(255 * unityColor.a), (int)(255 * unityColor.r), (int)(255 * unityColor.g), (int)(255 * unityColor.b));
+    }
+
+    /// <summary>
     /// Converts a <see cref="Color"/> to a hex code string.
     /// </summary>
     /// <param name="color">The <see cref="Color"/> to convert.</param>
@@ -87,16 +98,6 @@ public static class HintBuilding
         };
 
         return $"#{color.R:X2}{color.G:X2}{color.B:X2}{alphaInclude}";
-    }
-
-    /// <summary>
-    /// Converts a <see cref="UnityEngine.Color"/> to a system <see cref="Color"/>.
-    /// </summary>
-    /// <param name="unityColor">The <see cref="UnityEngine.Color"/> to convert.</param>
-    /// <returns>The converted <see cref="Color"/>.</returns>
-    public static Color UnityToSystemColor(UnityEngine.Color unityColor)
-    {
-        return Color.FromArgb((int)(255 * unityColor.a), (int)(255 * unityColor.r), (int)(255 * unityColor.g), (int)(255 * unityColor.b));
     }
 
     /// <summary>
@@ -130,7 +131,7 @@ public static class HintBuilding
     /// </remarks>
     public static string Sanitize(string str)
     {
-        return "<noparse>" + str.Replace("<noparse>", "<nopa‌rse>") + "</noparse>"; // zero width non join
+        return "<noparse>" + str.Replace("<noparse>", "<nopa‌rse>") + "</noparse>"; // zero width non joiner
     }
 
     /// <summary>
@@ -673,6 +674,7 @@ public static class HintBuilding
         return sb.Append('<')
           .Append(tag)
           .Append('=')
-          .AppendFormat(format, "0.###"); // up to 3 degrees of precision
+          .AppendFormat(format, "0.###") // up to 3 decimal places (but no trailing zeros)
+          .Append('>');
     }
 }

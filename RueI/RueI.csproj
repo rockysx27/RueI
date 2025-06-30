@@ -21,6 +21,7 @@
 		<PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
 		<PackageReleaseNotes>complete rewrite</PackageReleaseNotes>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<Nullable>enable</Nullable>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
 	  <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
@@ -39,8 +40,16 @@
 		<Reference Include="Assembly-CSharp-firstpass"><HintPath>$(SL_REFERENCES)/Assembly-CSharp-firstpass.dll</HintPath></Reference>
 		<Reference Include="Mirror"><HintPath>$(SL_REFERENCES)/Mirror.dll</HintPath></Reference>
 		<Reference Include="NorthwoodLib"><HintPath>$(SL_REFERENCES)/NorthwoodLib.dll</HintPath></Reference>
+		<Reference Include="System.Runtime.CompilerServices.Unsafe">
+		  <HintPath>..\..\..\Downloads\LabAPI\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+		</Reference>
 		<Reference Include="UnityEngine"><HintPath>$(SL_REFERENCES)/UnityEngine.dll</HintPath></Reference>
 		<Reference Include="UnityEngine.CoreModule"><HintPath>$(SL_REFERENCES)/UnityEngine.CoreModule.dll</HintPath></Reference>
-		<Reference Include="mscorlib"><HintPath>$(SL_REFERENCES)/mscorlib.dll</HintPath></Reference>
+		<Reference Include="mscorlib"><HintPath>$(SL_REFERENCES)/mscorlib.dll</HintPath><Aliases>global, mscorlib</Aliases></Reference>
+	</ItemGroup>
+	<ItemGroup>
+	  <Reference Update="System">
+	    <Aliases>global, System</Aliases>
+	  </Reference>
 	</ItemGroup>
 </Project>

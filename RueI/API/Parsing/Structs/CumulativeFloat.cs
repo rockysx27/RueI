@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using Mirror;
 using RueI.API.Elements.Parameters;
+using RueI.Utils;
 using RueI.Utils.Collections;
 using RueI.Utils.Extensions;
 
@@ -67,15 +68,25 @@ internal struct CumulativeFloat
         {
             ref AnimatableFloat animatableFloat = ref cumulativeFloat.curves[i];
 
-            AnimatableFloat inverse = animatableFloat.Inverse;
-
-            this.Add(in inverse);
+            this.Add(animatableFloat.Inverse);
         }
 
         this.value -= cumulativeFloat.value;
     }
 
     public void Add(in AnimatableFloat value)
+    {
+        if (value.IsAnimated)
+        {
+            this.curves.Add(in value);
+        }
+        else
+        {
+            this.value += value.AddendOrValue;
+        }
+    }
+
+    public void AddTransformed(in AnimatableFloat value, float multiplier, float addend)
     {
         if (value.IsAnimated)
         {
@@ -117,6 +128,7 @@ internal struct CumulativeFloat
         for (int i = 0; i < this.curves.Length; i++)
         {
             this.curves[i].Multiplier /= value;
+            this.curves[i].AddendOrValue /= value;
         }
 
         this.value /= value;
@@ -131,6 +143,7 @@ internal struct CumulativeFloat
         for (int i = 0; i < this.curves.Length; i++)
         {
             this.curves[i].Multiplier *= value;
+            this.curves[i].AddendOrValue *= value;
         }
 
         this.value *= value;
@@ -147,33 +160,42 @@ internal struct CumulativeFloat
 
     public readonly void WriteAsLineHeight(
         NetworkWriter writer,
-        NetworkWriter paramWriter,
-        List<ContentParameter> parameters,
-        List<NoBreakInfo> nobreaks,
-        ref int paramIndex)
+        ParameterHandler paramHandler,
+        List<NoBreakInfo> nobreaks)
     {
         if (this.curves.Length != 0) // uncommon path
         {
             for (int i = 0; i < this.curves.Length; i++)
             {
-                ref readonly AnimatableFloat animatableFloat = ref this.curves[i];
+                ref AnimatableFloat animatableFloat = ref this.curves[i];
 
-                // write parameter
-                AnimatedParameter param = (AnimatedParameter)parameters[animatableFloat.ParameterIndex];
-                paramWriter.WriteByte(ElementCombiner.AnimatedParameterID);
-                paramWriter.WriteDouble(param.Offset);
-                paramWriter.WriteString(null);
-                paramWriter.WriteBool(false);
-                param.Value.WriteTransformed(paramWriter, animatableFloat.Multiplier, animatableFloat.AddendOrValue);
+                animatableFloat.Multiplier /= Constants.EmSize;
+
+                int id = paramHandler.AddAnimatableFloat(in animatableFloat);
 
                 writer.WriteStringNoSize("<line-height=");
-                writer.WriteFormatItemNoBreak(paramIndex++, nobreaks);
-                writer.WriteStringNoSize(">\n");
+
+                if (animatableFloat.AbsoluteValue)
+                {
+                    if (float.IsNegative(animatableFloat.Multiplier))
+                    {
+                        writer.WriteUtf8Char('-');
+                    }
+                    else
+                    {
+                        // the negative sign is only considered if it is the first char
+                        writer.WriteUtf8Char('A');
+                    }
+                }
+
+                writer.WriteFormatItemNoBreak(id, nobreaks);
+                writer.WriteStringNoSize("e>\n");
             }
         }
 
+        // write as em to avoid being too big for the max size
         writer.WriteStringNoSize("<line-height=");
-        writer.WriteFloatAsString(this.value);
-        writer.WriteStringNoSize(">\n</line-height>");
+        writer.WriteFloatAsString(this.value / Constants.EmSize);
+        writer.WriteStringNoSize("e>\n</line-height>");
     }
 }

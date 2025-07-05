@@ -25,23 +25,15 @@ public abstract class Element
     public float Position { get; }
 
     /// <summary>
-    /// Gets a value indicating whether noparse will parse escape sequences.
+    /// Gets the behavior of <c>noparse</c> tags in the <see cref="Element"/>.
     /// </summary>
     /// <remarks>
-    /// <c>&lt;noparse&gt;</c> tags, according to
-    /// normal hint rules, will still parse escape sequences, such as \u003c or <c>\n</c> (not the singular character).
-    /// The default value is <see langword="false"/>.
+    /// This allows for custom behavior when parsing certain values in the text of the <see cref="Element"/>.
+    /// This prevents players from breaking hints and bypassing <c>noparse</c>.
+    /// The default value is <see cref="NoparseSettings.ParsesNone"/>. It is recommended to
+    /// keep this value as the default.
     /// </remarks>
-    public bool NoparseParsesEscapeSequences { get; init; } = false;
-
-    /// <summary>
-    /// Gets a value indicating whether noparse will parse format items.
-    /// </summary>
-    /// <remarks>
-    /// By default, &lt;noparse&gt; tags will still parse format items and braces, such as {0} or {.
-    /// Setting this to <see langword="false"/> disables this behavior. The default value is <see langword="false"/>.
-    /// </remarks>
-    public bool NoparseParsesFormatItems { get; init; } = false;
+    public NoparseSettings NoparseSettings { get; init; } = NoparseSettings.ParsesNone;
 
     /// <summary>
     /// Gets an animated override for the position.

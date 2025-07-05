@@ -6,14 +6,11 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 
 using Mirror;
 using mscorlib::System.Buffers.Text;
 using RueI.API.Parsing.Structs;
-using UnityEngine;
-using YamlDotNet.Core.Tokens;
 
 /// <summary>
 /// Provides extensions for the <see cref="NetworkWriter"/> class to write <see cref="ReadOnlySpan{T}"/>s.
@@ -24,34 +21,18 @@ internal static class NetworkWriterSpanExtensions
     private static readonly UTF8Encoding Encoding = new(false, true);
 
     /// <summary>
-    /// Writes a <see cref="ReadOnlySpan{T}"/> and the number of elements in it to a <see cref="NetworkWriter"/>.
+    /// Writes a <see langword="string"/> without writing its size.
     /// </summary>
-    /// <typeparam name="T">The type to write. Should have a <see cref="Writer{T}"/>.</typeparam>
     /// <param name="writer">The <see cref="NetworkWriter"/> to write to.</param>
-    /// <param name="span">The <see cref="Span{T}"/> to write.</param>
-    /// <exception cref="IndexOutOfRangeException">Thrown when there are more
-    /// than 16777216 elements in <paramref name="span"/>.</exception>
-    internal static void WriteSpanAndLength<T>(this NetworkWriter writer, ReadOnlySpan<T> span)
-    {
-        if (span.Length > 16777216)
-        {
-            throw new IndexOutOfRangeException($"NetworkWriter.WriteSpan - ReadOnlySpan<{typeof(T)}> too big: {span.Length} elements. Limit: {MaxArraySize}");
-        }
-
-        writer.WriteInt(span.Length);
-        for (int i = 0; i < span.Length; i++)
-        {
-            writer.Write(span[i]);
-        }
-    }
-
+    /// <param name="str">The <see langword="string"/> to write.</param>
+    /// <exception cref="IndexOutOfRangeException"><paramref name="str"/> is too long.</exception>
     internal static void WriteStringNoSize(this NetworkWriter writer, string str)
     {
         int maxByteCount = Encoding.GetMaxByteCount(str.Length);
 
-        writer.EnsureLength(2 + maxByteCount);
+        writer.EnsureLength(maxByteCount);
 
-        int bytes = Encoding.GetBytes(str, writer.PositionSpan());
+        int bytes = Encoding.GetBytes(str, writer.BufferSpan());
         if (bytes > 65534)
         {
             throw new IndexOutOfRangeException(string.Format("NetworkWriter.WriteString - Value too long: {0} bytes. Limit: {1} bytes", bytes, 65534));
@@ -75,7 +56,7 @@ internal static class NetworkWriterSpanExtensions
 
         writer.EnsureLength(maxByteCount + USHORT_SIZE);
 
-        int count = Encoding.GetBytes(span, writer.PositionSpan(USHORT_SIZE));
+        int count = Encoding.GetBytes(span, writer.BufferSpan(USHORT_SIZE));
 
         if (count > NetworkWriter.MaxStringLength)
         {
@@ -106,6 +87,12 @@ internal static class NetworkWriterSpanExtensions
         writer.Position += count;
     }
 
+    /// <summary>
+    /// Writes a format item and adds a <see cref="NoBreakInfo"/>.
+    /// </summary>
+    /// <param name="writer">The writer to write to.</param>
+    /// <param name="i">The ID of the format item.</param>
+    /// <param name="nobreaks">A <see cref="List{T}"/> to add the <see cref="NoBreakInfo"/> to.</param>
     internal static void WriteFormatItemNoBreak(this NetworkWriter writer, int i, List<NoBreakInfo> nobreaks)
     {
         int start = writer.Position;
@@ -119,6 +106,11 @@ internal static class NetworkWriterSpanExtensions
         });
     }
 
+    /// <summary>
+    /// Writes a format item without adding a <see cref="NoBreakInfo"/>.
+    /// </summary>
+    /// <param name="writer">The writer to write to.</param>
+    /// <param name="i">The ID of the format item.</param>
     internal static void WriteFormatItem(this NetworkWriter writer, int i)
     {
         writer.WriteUtf8Char('{');
@@ -137,7 +129,7 @@ internal static class NetworkWriterSpanExtensions
 
         writer.EnsureLength(MaxIntegerDigits);
 
-        Span<byte> span = writer.PositionSpan();
+        Span<byte> span = writer.BufferSpan();
 
         do
         {
@@ -160,12 +152,10 @@ internal static class NetworkWriterSpanExtensions
     {
         const int Length = 32;
 
-        ////writer.EnsureLength(Length);
-
         int bytes;
-        StandardFormat format = new('F', 5);
+        StandardFormat format = new('F', 5); // 5 decimals
 
-        while (!Utf8Formatter.TryFormat(value, writer.PositionSpan(), out bytes, format))
+        while (!Utf8Formatter.TryFormat(value, writer.BufferSpan(), out bytes, format))
         {
             writer.EnsureLength(Length);
         }
@@ -180,68 +170,45 @@ internal static class NetworkWriterSpanExtensions
     /// <param name="ch">The <see langword="char"/> to write.</param>
     internal static void WriteUtf8Char(this NetworkWriter writer, char ch) => writer.WriteByte((byte)ch);
 
-    internal static void WriteBytes(this NetworkWriter writer, ReadOnlySpan<byte> bytes)
+    /// <summary>
+    /// Writes a <see langword="byte"/> <see cref="ReadOnlySpan{T}"/> without writing its size.
+    /// </summary>
+    /// <param name="writer">The <see cref="NetworkWriter"/> to write to.</param>
+    /// <param name="bytes">The <see cref="ReadOnlySpan{T}"/> to write.</param>
+    /// <param name="writeSize">Whether or not to write the size.</param>
+    internal static void WriteBytes(this NetworkWriter writer, ReadOnlySpan<byte> bytes, bool writeSize)
     {
         writer.EnsureLength(bytes.Length);
 
-        bytes.CopyTo(writer.PositionSpan());
-
-        writer.Position += bytes.Length;
-    }
-
-    internal static void WriteBytesAndSize(this NetworkWriter writer, ReadOnlySpan<byte> bytes)
-    {
-        writer.EnsureLength(bytes.Length + sizeof(ushort));
-
-        writer.WriteUShort((ushort)bytes.Length);
-
-        bytes.CopyTo(writer.PositionSpan());
-
-        writer.Position += bytes.Length;
-    }
-
-    internal static void WriteNetworkWriterAndLength(this NetworkWriter writer, NetworkWriter otherWriter)
-    {
-        int otherWriterPos = otherWriter.Position;
-
-        writer.EnsureLength(otherWriterPos);
-
-        writer.WriteUShort((ushort)otherWriterPos);
-
-        otherWriter.buffer.AsSpan(0, otherWriterPos).CopyTo(writer.PositionSpan());
-
-        /* unsafe
+        if (writeSize)
         {
-            Buffer.MemoryCopy(Unsafe.AsPointer(ref writer.buffer[thisWriterPos]), Unsafe.AsPointer(ref writer.buffer[thisWriterPos]), long.MaxValue, thisWriterPos);
-        } */
+            writer.EnsureLength(sizeof(ushort));
+
+            writer.WriteUShort((ushort)bytes.Length);
+        }
+
+        bytes.CopyTo(writer.BufferSpan());
+
+        writer.Position += bytes.Length;
     }
 
-    internal static void CopyToWriter(this NetworkWriter writer, NetworkWriter otherWriter)
-    {
-        int thisWriterPos = writer.Position;
+    /// <summary>
+    /// Writes a <see cref="NetworkWriter"/> to this <see cref="NetworkWriter"/>.
+    /// </summary>
+    /// <param name="writer">The <see cref="NetworkWriter"/> to write to.</param>
+    /// <param name="otherWriter">The <see cref="NetworkWriter"/> to write.</param>
+    /// <param name="writeSize">Whether to write the size, as a <see langword="ushort"/>.</param>
+    internal static void WriteNetworkWriter(this NetworkWriter writer, NetworkWriter otherWriter, bool writeSize) => writer.WriteBytes(otherWriter.ContentSpan(), writeSize);
 
-        otherWriter.EnsureLength(thisWriterPos);
-
-        writer.buffer.AsSpan(0, thisWriterPos).CopyTo(otherWriter.PositionSpan());
-    }
-
+    /// <summary>
+    /// Gets the writable portion of a <see cref="NetworkWriter"/> as a <see cref="Span{T}"/>.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Span<byte> PositionSpan(this NetworkWriter writer, int offset = 0) => writer.buffer.AsSpan(writer.Position + offset);
+    private static Span<byte> BufferSpan(this NetworkWriter writer, int offset = 0) => writer.buffer.AsSpan(writer.Position + offset);
 
-    private static int GetDigitsFast(int i)
-    {
-        return i switch
-        {
-            < 10 => 1,
-            < 100 => 2,
-            < 1_000 => 3,
-            < 10_000 => 4,
-            < 100_000 => 5,
-            < 1_000_000 => 6,
-            < 10_000_000 => 7,
-            < 100_000_000 => 8,
-            < 1_000_000_000 => 9,
-            _ => 10,
-        };
-    }
+    /// <summary>
+    /// Gets the writable portion of a <see cref="NetworkWriter"/> as a <see cref="Span{T}"/>.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Span<byte> ContentSpan(this NetworkWriter writer) => writer.buffer.AsSpan(0, writer.Position);
 }

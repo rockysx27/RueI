@@ -14,6 +14,7 @@ using RueI.API.Elements.Parameters;
 using RueI.API.Parsing.Modifications;
 using RueI.API.Parsing.Structs;
 using RueI.Utils.Extensions;
+using Unity.Collections.LowLevel.Unsafe;
 
 /// <summary>
 /// Combines multiple <see cref="Elements.Element"/>s into a single <see cref="TextHint"/>.
@@ -67,12 +68,14 @@ internal static class ElementCombiner
             int elemParamIndex = paramIndex;
             int paramCount = element.ParameterList.Count;
 
+            // TODO: reverse (parameter list is read back to front while we want to read it front to back)
             CurrentParameters.Clear();
             CurrentParameters.EnsureCapacity(paramCount);
             foreach (ContentParameter parameter in element.ParameterList)
             {
                 CurrentParameters.Add(parameter);
 
+                totalWriter.WriteByte((byte)parameter.HintParameterType);
                 parameter.Write(totalWriter);
             }
 
@@ -88,8 +91,10 @@ internal static class ElementCombiner
                 // TODO: add offset, make func pos
                 AddAnimatedParameter(totalWriter, element.AnimatedPosition.Value);
 
+                AnimatedParameter parameter = new(element.AnimatedPosition.Value);
+
                 position = new();
-                position.Add(new AnimatableFloat(paramIndex++, 0, 1, false));
+                position.Add(new AnimatableFloat(parameter));
             }
             else
             {
@@ -117,12 +122,13 @@ internal static class ElementCombiner
             }
             else
             {
+                // TODO: check
                 CalculateOffset(lastPosition, lastOffset, position);
+
+                SubOffset.WriteAsLineHeight(contentWriter, totalWriter, CurrentParameters, Nobreaks, ref paramIndex);
 
                 CumulativeOffset.Add(SubOffset);
             }
-
-            CumulativeOffset.WriteAsLineHeight(contentWriter, totalWriter, CurrentParameters, Nobreaks, ref paramIndex);
 
             // begin writing
             ReadOnlySpan<char> buffer = text.AsSpan();
@@ -137,6 +143,7 @@ internal static class ElementCombiner
 
                 switch (current.Type)
                 {
+                    // TODO: rewrite as a class (what the fuck was i thinking?)
                     case Modification.ModificationType.AdditionalBackslash:
                         contentWriter.WriteChar('\\');
                         break;
@@ -157,7 +164,7 @@ internal static class ElementCombiner
                         break;
                     case Modification.ModificationType.SkipNext:
                         buffer = buffer[current.AdditionalInfo..];
-                        continue;
+                        break;
                     case Modification.ModificationType.DoNotBreakFor:
                         int writerPosition = contentWriter.Position;
 
@@ -176,17 +183,24 @@ internal static class ElementCombiner
             CumulativeOffset.Add(data.Offset);
             lastPosition = position;
             lastOffset = data.Offset;
-        }
+        } // foreach (Element element in elements)
 
         contentWriter.WriteStringNoSize("<size=0></mspace></cspace><line-height=0>."); // trigger trailing newlines
 
-        if (contentWriter.Position > MaxStringLength)
+        using NetworkWriterPooled offsetWriter = NetworkWriterPool.Get();
+
+        CumulativeOffset.WriteAsLineHeight(offsetWriter, totalWriter, CurrentParameters, Nobreaks, ref paramIndex);
+
+        // TODO: support offsetwriter for this
+        int length = contentWriter.Position + offsetWriter.Position;
+        if (contentWriter.Position + offsetWriter.Position > MaxStringLength)
         {
-            using NetworkWriterPooled contentWithParameterWriter = new();
+            using NetworkWriterPooled contentWithParameterWriter = NetworkWriterPool.Get();
+
+            contentWithParameterWriter.WriteNetworkWriter(offsetWriter, false);
 
             CumulativeOffset.WriteAsLineHeight(contentWithParameterWriter, totalWriter, CurrentParameters, Nobreaks, ref paramIndex);
 
-            int length = contentWriter.Position;
             int pos = 0;
             int i = 0;
 
@@ -203,7 +217,7 @@ internal static class ElementCombiner
                     if (maxForNobreak < MaxStringLength)
                     {
                         AddStringParameter(totalWriter, contentWithParameterWriter, contentWriter.buffer.AsSpan(pos, maxForNobreak), ref paramIndex);
-                        contentWithParameterWriter.WriteBytes(contentWriter.buffer.AsSpan(start, nobreak.End));
+                        contentWithParameterWriter.WriteBytes(contentWriter.buffer.AsSpan(start, nobreak.End), false);
 
                         pos = nobreak.End;
 
@@ -217,17 +231,25 @@ internal static class ElementCombiner
 
                 pos += cap;
             }
-            while (length > pos);
+            while (length > pos); // write while there is still stuff left
 
-            totalWriter.WriteNetworkWriterAndLength(contentWithParameterWriter);
+            totalWriter.WriteNetworkWriter(contentWithParameterWriter, true);
         }
         else
         {
-            totalWriter.WriteNetworkWriterAndLength(contentWriter);
+            // TODO: make sure we write cumulativeoffset at the correct spot / length
+            totalWriter.WriteUShort((ushort)(contentWriter.Position + offsetWriter.Position)); // write padding
+
+            totalWriter.WriteNetworkWriter(offsetWriter, false);
+            totalWriter.WriteNetworkWriter(contentWriter, false);
         }
 
+        int oldPos = totalWriter.Position;
+
         totalWriter.Position = paramCountPos;
-        totalWriter.Write(paramIndex);
+        totalWriter.WriteInt(paramIndex);
+
+        totalWriter.Position = oldPos;
 
         hub.connectionToClient.Send(totalWriter.ToArraySegment());
     }
@@ -253,7 +275,7 @@ internal static class ElementCombiner
     private static void AddStringParameter(NetworkWriter paramWriter, NetworkWriter newContentWriter, ReadOnlySpan<byte> bytes, ref int parameterIndex)
     {
         paramWriter.WriteByte(StringParameterID);
-        paramWriter.WriteBytesAndSize(bytes);
+        paramWriter.WriteBytes(bytes, writeSize: true);
         newContentWriter.WriteFormatItem(parameterIndex++);
     }
 

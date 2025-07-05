@@ -19,7 +19,7 @@ public enum NoparseSettings
     ParsesFormatItems = 1 << 1,
 
     /// <summary>
-    /// Noparse will parse no options.
+    /// Noparse will parse none of the options.
     /// </summary>
     ParsesNone = 0,
 

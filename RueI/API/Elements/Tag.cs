@@ -1,7 +1,8 @@
 ﻿namespace RueI.API.Elements;
 
 /// <summary>
-/// Represents a unique identifier for an element within a <see cref="Display"/>.
+/// Represents a unique identifier for an element within a <see cref="Display"/>. This class
+/// cannot be inherited.
 /// </summary>
 /// <remarks>
 /// A <see cref="Display"/> can only have one element with a specific <see cref="Tag"/> at a time. If two <see cref="Tag"/>s are created with
@@ -55,5 +56,5 @@ public sealed class Tag
     {
         // ensure that a null id != null id
         return obj is Tag tag && (tag.Id?.Equals(tag.Id) ?? false || ReferenceEquals(this, obj));
-    }   
+    }
 }

@@ -136,7 +136,7 @@ public readonly struct AnimatedValue : IEnumerable<Keyframe>
     /// Writes this <see cref="AnimatedValue"/> to a <see cref="NetworkWriter"/>.
     /// </summary>
     /// <param name="writer">The <see cref="NetworkWriter"/> to write to.</param>
-    internal void WriteTransformed(NetworkWriter writer, float multiply, float add)
+    internal void WriteTransformed(NetworkWriter writer, float multiplier, float addend)
     {
         int length = this.frames.Count;
 
@@ -164,11 +164,13 @@ public readonly struct AnimatedValue : IEnumerable<Keyframe>
             Keyframe frame = networkFrame.Keyframe;
 
             writer.WriteFloat(frame.time);
-            writer.WriteFloat((frame.value * multiply) + add);
+            writer.WriteFloat((frame.value * multiplier) + addend);
+
             if (networkFrame.Tangental)
             {
-                writer.WriteFloat(frame.inTangent * multiply); // TODO: check to make sure works
-                writer.WriteFloat(frame.outTangent * multiply);
+                // we only need to multiply the in/out tangents - do not add
+                writer.WriteFloat(frame.inTangent * multiplier);
+                writer.WriteFloat(frame.outTangent * multiplier);
             }
 
             if (networkFrame.Weighted)

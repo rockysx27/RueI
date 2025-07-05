@@ -5,7 +5,7 @@ using System.Collections;
 /// <summary>
 /// Represents a modification to the text of an element.
 /// </summary>
-internal struct Modification
+internal readonly struct Modification
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="Modification"/> struct.

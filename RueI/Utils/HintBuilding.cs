@@ -509,6 +509,24 @@ public static class HintBuilding
     public static StringBuilder CloseColor(this StringBuilder sb) => sb.Append("</color>");
 
     /// <summary>
+    /// Adds a closing case tag to a <see cref="StringBuilder"/>.
+    /// </summary>
+    /// <param name="sb">The <see cref="StringBuilder"/> to use.</param>
+    /// <param name="caseStyle">The case to close.</param>
+    /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
+    public static StringBuilder CloseCase(this StringBuilder sb, CaseStyle caseStyle)
+    {
+        string format = caseStyle switch
+        {
+            CaseStyle.Uppercase => "allcaps",
+            CaseStyle.Lowercase => "lowercase",
+            _ => "smallcaps",
+        };
+
+        return sb.Append($"</{format}>");
+    }
+
+    /// <summary>
     /// Adds a closing align tag to a <see cref="StringBuilder"/>.
     /// </summary>
     /// <param name="sb">The <see cref="StringBuilder"/> to use.</param>
@@ -674,7 +692,8 @@ public static class HintBuilding
         return sb.Append('<')
           .Append(tag)
           .Append('=')
-          .AppendFormat(format, "0.###") // up to 3 decimal places (but no trailing zeros)
+          .Append(value) // up to 3 decimal places (but no trailing zeros)
+          .Append(format)
           .Append('>');
     }
 }

@@ -5,6 +5,7 @@ extern alias mscorlib;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 using RueI.API.Elements;
@@ -15,6 +16,7 @@ using RueI.API.Parsing.Structs;
 using RueI.Utils;
 using RueI.Utils.Collections;
 using RueI.Utils.Enums;
+using RueI.Utils.Extensions;
 
 using static RueI.API.Parsing.Modifications.Modification;
 
@@ -78,6 +80,9 @@ internal static class Parser
     {
         Parser.text = text;
 
+        noparseParsesEscapeSeq = element.NoparseSettings.HasFlagFast(Elements.Enums.NoparseSettings.ParsesEscapeSequences);
+        noparseParsesFormat = element.NoparseSettings.HasFlagFast(Elements.Enums.NoparseSettings.ParsesFormatItems);
+
         // TODO: support infinite
         CurrentParameters.EnsureCapacity(element.ParameterList.Count);
 
@@ -112,6 +117,11 @@ internal static class Parser
 
     private static void HandleChar(char ch)
     {
+        if (TryParseFormatItem(out int _))
+        {
+            return;
+        }
+
         switch (ch)
         {
             case '<':
@@ -152,7 +162,7 @@ internal static class Parser
                     {
                         case ' ': // space works identical to = for tags that don't take a parameter
                         case '=':
-                            if (tag == RichTextTag.Noparse)
+                            if (tag == RichTextTag.Noparse) // if we have something like <noparse=...>, inside ... noparse is technically on
                             {
                                 noparse = true;
                             }
@@ -318,14 +328,19 @@ internal static class Parser
                             Modifications.Add(new Modification(ModificationType.InvalidFormatItem, start, length));
                             Modifications.Add(new Modification(ModificationType.DoNotBreakFor, start, length));
 
-                            // doesn't really matter what we do here
+                            // doesn't really matter what we do hereW
                             Unsafe.SkipInit(out num);
                             return false;
                         }
 
-                        Modifications.Add(new Modification(ModificationType.FormatItem, start));
+                        // since we load the parameters in reverse order, we get the opposite index here
+                        int index = CurrentParameters.Count - result;
+
+                        // TODO: add skip for to tag
+                        // TODO: opposite index
+                        Modifications.Add(new Modification(ModificationType.FormatItem, start, index));
                         Modifications.Add(new Modification(ModificationType.DoNotBreakFor, start, length));
-                        num = result;
+                        num = index;
 
                         return true;
                     }
@@ -351,7 +366,11 @@ internal static class Parser
 
     private static bool TryParseMeasurements(int count, out MeasurementInfo info)
     {
+        // TODO: support weird leading tag shit
+        // TODO: break if too many spaces, support otehr weird space shit
         const MeasurementUnit NotSet = (MeasurementUnit)(-1);
+        const MeasurementUnit SpaceMeasurement = (MeasurementUnit)(-2);
+
         MeasurementUnit unit = NotSet;
 
         MeasurementInfo.AdditionType type;
@@ -383,7 +402,8 @@ internal static class Parser
             {
                 '-' => MeasurementInfo.AdditionType.SubtractiveOrNegative,
                 '+' => MeasurementInfo.AdditionType.Additive,
-                _ => MeasurementInfo.AdditionType.Default,
+                _ when TagHelpers.IsDigitFast(ch) => MeasurementInfo.AdditionType.Default,
+                _ => MeasurementInfo.AdditionType.Absolute,
             };
         }
         else
@@ -407,27 +427,49 @@ internal static class Parser
                     comma = true;
                     break;
                 case '>':
-                    float value = 0;
-
-                    // TODO: check measurement > 32768
                     if (paramId == -1)
                     {
-                        value = decimalPoint == -1
+                        float value = decimalPoint == -1
                             ? TagHelpers.FromIntegerAndDecimal(CharBuffer[..numDigits], ReadOnlySpan<char>.Empty)
                             : TagHelpers.FromIntegerAndDecimal(CharBuffer[..decimalPoint], CharBuffer[decimalPoint..numDigits]);
-                    }
 
-                    info = new()
+                        if (value > Constants.MaxValueSize)
+                        {
+                            info = default;
+
+                            return false;
+                        }
+
+                        info = new()
+                        {
+                            Unit = unit == NotSet ? MeasurementUnit.Pixels : unit,
+                            AddType = type,
+                            Value = value,
+                        };
+                    }
+                    else
                     {
-                        Unit = unit == NotSet ? MeasurementUnit.Pixels : unit,
-                        AddType = type,
-                        ParamId = paramId,
-                        Value = value,
-                    };
+                        if (CurrentParameters[paramId] is not AnimatedParameter animated
+                            || animated.Format != null // no format is allowed for tags
+                            || animated.RoundToInt
+                            || animated.Value.Any(x => x.value > Constants.MaxValueSize / 2))
+                        {
+                            info = default;
+                            return false;
+                        }
+
+                        info = new()
+                        {
+                            Unit = unit == NotSet ? MeasurementUnit.Pixels : unit,
+                            AddType = type,
+                            Parameter = animated,
+                            Value = 0,
+                        };
+                    }
 
                     return true;
                 default:
-                    if (unit == NotSet)
+                    if (unit == NotSet && type != MeasurementInfo.AdditionType.Absolute)
                     {
                         switch (ch)
                         {
@@ -437,7 +479,7 @@ internal static class Parser
                             case '%':
                                 unit = MeasurementUnit.Percentage;
                                 break;
-                            case ' ':
+                            case ' ': // if there is no leading values, space breaks (no idea why)
                             case 'p':
                                 unit = MeasurementUnit.Pixels;
                                 break;
@@ -452,7 +494,7 @@ internal static class Parser
                         else
                         {
                             // TODO: remove this huge ass check
-                            if (paramId != -1 || unit != NotSet || decimalPoint != -1 || numDigits != -1 || comma || CurrentParameters[paramId] is not AnimatedParameter)
+                            if (paramId != -1 || unit != NotSet || decimalPoint != -1 || numDigits != -1 || comma)
                             {
                                 goto EndLoop;
                             }
@@ -472,8 +514,6 @@ internal static class Parser
         while (MoveNextMeasurement());
 
     EndLoop:
-
-        // TODO: break tag
         BreakTag();
 
         info = default;
@@ -598,7 +638,7 @@ internal static class Parser
     private static void BreakTag()
     {
         ModificationType type = noparse ? ModificationType.InsertNoparse : ModificationType.InsertCloseNoparse;
-        Modifications.Add(new Modification(type, position));
+        Modifications.Add(new Modification(type, position - 1));
     }
 
     private static void AddLinebreak()
@@ -609,7 +649,9 @@ internal static class Parser
         }
         else if (SizeStack.TryPeek(out AnimatableFloat value))
         {
-            Offset.Add(in value);
+            const float SizeToLineHieght = Constants.DefaultLineHeight / Constants.EmSize;
+
+            Offset.Add(value with { Multiplier = value.Multiplier * SizeToLineHieght });
         }
         else
         {
@@ -632,11 +674,12 @@ internal static class Parser
 
         public float Value;
 
-        public int ParamId;
+        public AnimatedParameter? Parameter;
 
         internal enum AdditionType
         {
             Default,
+            Absolute,
             Additive,
             SubtractiveOrNegative,
         }
@@ -645,7 +688,12 @@ internal static class Parser
         {
             float multi = this.AddType == AdditionType.SubtractiveOrNegative ? -1f : 1f;
 
-            if (this.ParamId == -1)
+            if (add == 0 && this.Unit != MeasurementUnit.Pixels)
+            {
+                add = 0; // TODO: check this
+            }
+
+            if (this.Parameter == null)
             {
                 return this.Unit switch
                 {
@@ -659,9 +707,9 @@ internal static class Parser
                 bool abs = this.AddType != AdditionType.Default;
                 return this.Unit switch
                 {
-                    MeasurementUnit.Percentage => new(this.ParamId, add, pointSize / 100 * multi, abs),
-                    MeasurementUnit.Ems => new(this.ParamId, add, Constants.EmSize * multi, abs),
-                    _ => new(this.ParamId, add, multi, abs),
+                    MeasurementUnit.Percentage => new(this.Parameter, add, pointSize / 100 * multi, abs),
+                    MeasurementUnit.Ems => new(this.Parameter, add, Constants.EmSize * multi, abs),
+                    _ => new(this.Parameter, add, multi, abs),
                 };
             }
         }

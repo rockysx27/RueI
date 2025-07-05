@@ -1,14 +1,16 @@
 ﻿namespace RueI.API.Parsing.Structs;
 
+using RueI.API.Elements.Parameters;
+
 /// <summary>
 /// Represents a float that may have an animated value.
 /// </summary>
 internal struct AnimatableFloat
 {
     /// <summary>
-    /// The index of the parameter, or <c>-2</c> if there is no parameter.
+    /// The <see cref="AnimatedParameter"/> that this <see cref="AnimatableFloat"/> refers to, or <see langword="null"/> if there is no parameter.
     /// </summary>
-    internal int ParameterIndex;
+    internal AnimatedParameter? Parameter;
 
     /// <summary>
     /// The raw value, or a value to add to the curve (after multiplying).
@@ -31,38 +33,44 @@ internal struct AnimatableFloat
     /// <param name="value">The value to use for the <see cref="AnimatableFloat"/>.</param>
     internal AnimatableFloat(float value)
     {
-        this.ParameterIndex = -2;
         this.AddendOrValue = value;
     }
 
-    internal AnimatableFloat(int index, float sum, float multiplier, bool abs)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AnimatableFloat"/> struct.
+    /// </summary>
+    /// <param name="param">The parameter.</param>
+    /// <param name="sum">A value to add to each keyframe.</param>
+    /// <param name="multiplier">A value to multiply each keyframe's value by.</param>
+    /// <param name="abs">Whether to take the absolute value of the values.</param>
+    internal AnimatableFloat(AnimatedParameter param, float sum, float multiplier, bool abs)
     {
-        this.ParameterIndex = index;
+        this.Parameter = param;
         this.AddendOrValue = sum;
         this.Multiplier = multiplier;
         this.AbsoluteValue = abs;
     }
 
-    private AnimatableFloat(int id)
+    internal AnimatableFloat(AnimatedParameter param)
     {
-        this.ParameterIndex = id;
+        this.Parameter = param;
         this.Multiplier = 1;
     }
 
     /// <summary>
     /// Gets an invaldi <see cref="AnimatableFloat"/>.
     /// </summary>
-    public static AnimatableFloat Invalid => new(-1);
+    public static AnimatableFloat Invalid => new(float.NaN);
 
     /// <summary>
     /// Gets a value indicating whether this <see cref="AnimatableFloat"/> is animated.
     /// </summary>
-    public readonly bool IsAnimated => this.ParameterIndex == -2;
+    public readonly bool IsAnimated => this.Parameter != null;
 
     /// <summary>
     /// Gets a value indicating whether this <see cref="AnimatableFloat"/> is invalid.
     /// </summary>
-    public readonly bool IsInvalid => this.ParameterIndex == -1;
+    public readonly bool IsInvalid => float.IsNaN(this.AddendOrValue);
 
     /// <summary>
     /// Gets the inverse of this <see cref="AnimatableFloat"/>.

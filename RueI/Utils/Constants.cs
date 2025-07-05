@@ -21,6 +21,11 @@ internal static class Constants
     internal const int MaxTagLength = 129;
 
     /// <summary>
+    /// Gets the maximum value for a tag's value.
+    /// </summary>
+    internal const int MaxValueSize = 32768;
+
+    /// <summary>
     /// Gets the default line height for a given size.
     /// </summary>
     /// <param name="size">The size, in pixels.</param>

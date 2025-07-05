@@ -23,13 +23,13 @@ internal static class DictionaryExtensions
     /// are not removed.</returns>
     public static IEnumerable<TValue> FilterOut<TKey, TValue>(this IDictionary<TKey, TValue> dict, Predicate<KeyValuePair<TKey, TValue>> predicate)
     {
-        List<TKey> removeList = ListPool<TKey>.Shared.Rent();
+        CachedList<TKey>.List.Clear();
 
         foreach (KeyValuePair<TKey, TValue> pair in dict)
         {
             if (predicate(pair))
             {
-                removeList.Add(pair.Key);
+                CachedList<TKey>.List.Add(pair.Key);
             }
             else
             {
@@ -37,11 +37,15 @@ internal static class DictionaryExtensions
             }
         }
 
-        foreach (TKey key in removeList)
+        foreach (TKey key in CachedList<TKey>.List)
         {
             dict.Remove(key);
         }
+    }
 
-        ListPool<TKey>.Shared.Return(removeList);
+    // the normal ListPool<T> by default has 512 elements, much more than what is usually needed
+    private static class CachedList<T>
+    {
+        public static List<T> List { get; } = new();
     }
 }

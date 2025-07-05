@@ -1,7 +1,6 @@
 ﻿namespace RueI.Utils.Collections;
 
 using System;
-using System.Collections.Generic;
 
 /// <summary>
 /// Represents a <see langword="struct"/> list that offers <see langword="ref"/> access to elements.
@@ -105,6 +104,13 @@ internal struct StructList<T>
     {
         this.Length = 0;
     }
+
+    /// <summary>
+    /// Gets the values of the <see cref="StructList{T}"/> as a <see cref="Span{T}"/>.
+    /// </summary>
+    /// <param name="start">The position to start at.</param>
+    /// <returns>A <see cref="Span{T}"/> that encompasses all values from <paramref name="start"/> to <see cref="Length"/>.</returns>
+    public readonly Span<T> AsSpan(int start) => this.values.AsSpan(start, this.Length - start);
 
     private void GrowTo(int capacity)
     {

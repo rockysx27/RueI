@@ -19,7 +19,7 @@ public enum VerticalAlign
     Center,
 
     /// <summary>
-    /// Positions the top of the last line to be at the vertical position. Subsequent lines will appear below it.
+    /// Positions the top of the first line to be at the vertical position. Subsequent lines will appear below it.
     /// </summary>
     Down,
 }

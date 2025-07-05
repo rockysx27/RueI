@@ -32,6 +32,10 @@ public class AnimatedParameter : FormattableParameter
     /// </summary>
     /// <param name="value">The <see cref="AnimatedValue"/> to use.</param>
     /// <param name="format">The format to use.</param>
+    /// <remarks>
+    /// Note that a format is not allowed if the <see cref="AnimatedParameter"/> is inside a
+    /// line-height or size tag.
+    /// </remarks>
     public AnimatedParameter(AnimatedValue value, string format)
         : base(format)
     {
@@ -45,6 +49,10 @@ public class AnimatedParameter : FormattableParameter
     /// <param name="value">The <see cref="AnimatedValue"/> to use.</param>
     /// <param name="format">The format to use.</param>
     /// <param name="roundToInt">Whether to round the value to an <see langword="int"/>.</param>
+    /// <remarks>
+    /// Note that a format is not allowed if the <see cref="AnimatedParameter"/> is inside a
+    /// line-height or size tag.
+    /// </remarks>
     public AnimatedParameter(AnimatedValue value, string format, bool roundToInt)
         : this(value, format)
     {
@@ -76,6 +84,14 @@ public class AnimatedParameter : FormattableParameter
         writer.WriteString(this.Format);
         writer.WriteBool(this.RoundToInt);
         this.Value.Write(writer);
+    }
+
+    internal void WriteTransformed(NetworkWriter writer, float multiplier, float addend)
+    {
+        writer.WriteDouble(this.Offset);
+        writer.WriteString(this.Format);
+        writer.WriteBool(this.RoundToInt);
+        this.Value.WriteTransformed(writer, multiplier, addend);
     }
 
     private static void WriteFormat(NetworkWriter writer, char formatChar, int precision) => writer.WriteString(formatChar + precision.ToString());

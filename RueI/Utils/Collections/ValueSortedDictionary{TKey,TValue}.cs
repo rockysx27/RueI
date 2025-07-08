@@ -3,6 +3,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
@@ -19,75 +20,21 @@ using System.Diagnostics.CodeAnalysis;
 internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     where TValue : IComparable<TValue>
 {
-    private readonly Dictionary<TKey, LinkedListNode<TValue>> dictionary;
+    private readonly Dictionary<TKey, LinkedListNode<TValue>> dictionary = new();
     private readonly LinkedList<TValue> linkedList = new();
-    private readonly InsertionBehavior behavior;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ValueSortedDictionary{TKey, TValue}"/> class.
     /// </summary>
     public ValueSortedDictionary()
-        : this(InsertionBehavior.InsertBeforeEqual)
     {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ValueSortedDictionary{TKey, TValue}"/> class
-    /// with the given <see cref="InsertionBehavior"/>.
-    /// </summary>
-    /// <param name="insertionBehavior">The insertion behavior when inserting a value that has the
-    /// same sort order as another value.</param>
-    public ValueSortedDictionary(InsertionBehavior insertionBehavior)
-    {
-        this.dictionary = new();
-        this.behavior = insertionBehavior;
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ValueSortedDictionary{TKey, TValue}"/> class with the given capacity.
-    /// </summary>
-    /// <param name="capacity">The capacity of the dictionary.</param>
-    public ValueSortedDictionary(int capacity)
-        : this(capacity, InsertionBehavior.InsertBeforeEqual)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ValueSortedDictionary{TKey, TValue}"/> class with the given capacity
-    /// and the given <see cref="InsertionBehavior"/>.
-    /// </summary>
-    /// <param name="capacity">The capacity of the dictionary.</param>
-    /// <param name="insertionBehavior"><inheritdoc cref="ValueSortedDictionary(InsertionBehavior)" path="/param[@name='insertionBehavior']"/></param>
-    public ValueSortedDictionary(int capacity, InsertionBehavior insertionBehavior)
-    {
-        this.dictionary = new(capacity);
-        this.behavior = insertionBehavior;
-    }
-
-    /// <summary>
-    /// Represents the insertion behavior when inserting a value that
-    /// has the same sort order as another element.
-    /// </summary>
-    public enum InsertionBehavior
-    {
-        /// <summary>
-        /// The value will be inserted after all of the values
-        /// with the same sort order.
-        /// </summary>
-        InsertAfterEqual,
-
-        /// <summary>
-        /// The value will be inserted before all of the values
-        /// with the same sort order.
-        /// </summary>
-        InsertBeforeEqual,
     }
 
     /// <inheritdoc/>
     public ICollection<TKey> Keys => this.dictionary.Keys;
 
     /// <inheritdoc/>
-    public ICollection<TValue> Values => new ValueCollection(this.linkedList);
+    public ICollection<TValue> Values => throw new NotImplementedException();
 
     /// <inheritdoc/>
     public int Count => this.dictionary.Count;
@@ -138,10 +85,7 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
     public bool ContainsKey(TKey key) => this.dictionary.ContainsKey(key);
 
     /// <inheritdoc/>
-    public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
-    {
-        throw new NotImplementedException();
-    }
+    public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) => throw new NotImplementedException();
 
     /// <inheritdoc/>
     public bool Remove(TKey key)
@@ -158,6 +102,29 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
 
     /// <inheritdoc/>
     public bool Remove(KeyValuePair<TKey, TValue> item) => this.Remove(item.Key);
+
+    /// <summary>
+    /// Removes the element with the given key from the <see cref="ValueSortedDictionary{TKey, TValue}"/>,
+    /// and copies the value to the <paramref name="value"/> parameter.
+    /// </summary>
+    /// <param name="key">The key of the element to remove.</param>
+    /// <param name="value">If this method returns <see langword="true"/>, the value of the removed element.</param>
+    /// <returns><see langword="true"/> if the element was in the <see cref="ValueSortedDictionary{TKey, TValue}"/> and removed;
+    /// otherwise, <see langword="false"/>.</returns>
+    public bool Remove(TKey key, [NotNullWhen(true)] out TValue value)
+    {
+        if (this.dictionary.Remove(key, out var node))
+        {
+            value = node.Value;
+
+            this.linkedList.Remove(value);
+
+            return true;
+        }
+
+        value = default!;
+        return false;
+    }
 
     /// <inheritdoc/>
     public bool TryGetValue(TKey key, [NotNullWhen(true)] out TValue value)
@@ -189,30 +156,14 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
     {
         LinkedListNode<TValue> valueNode;
 
-        if (this.behavior == InsertionBehavior.InsertBeforeEqual)
+        for (var node = this.linkedList.Last; node != null; node = node.Previous)
         {
-            for (var node = this.linkedList.First; node != null; node = node.Next)
+            // greater than or equal to 0 = comes before / same sort order
+            if (value.CompareTo(node.Value) >= 0)
             {
-                // less than 0 = comes before
-                if (value.CompareTo(node.Value) <= 0)
-                {
-                    valueNode = this.linkedList.AddBefore(node, value);
+                valueNode = this.linkedList.AddAfter(node, value);
 
-                    goto SkipAddLast;
-                }
-            }
-        }
-        else
-        {
-            for (var node = this.linkedList.Last; node != null; node = node.Previous)
-            {
-                // greater than or equal to 0 = comes before / same sort order
-                if (value.CompareTo(node.Value) >= 0)
-                {
-                    valueNode = this.linkedList.AddAfter(node, value);
-
-                    goto SkipAddLast;
-                }
+                goto SkipAddLast;
             }
         }
 
@@ -228,34 +179,5 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
         {
             this.linkedList.Remove(value);
         }
-    }
-
-    // necessary because turning a LinkedList into a collection allows for adding elements (potential logic error)
-    private readonly struct ValueCollection : ICollection<TValue>
-    {
-        private readonly LinkedList<TValue> linkedList;
-
-        public ValueCollection(LinkedList<TValue> linkedList)
-        {
-            this.linkedList = linkedList;
-        }
-
-        public readonly int Count => this.linkedList.Count;
-
-        public readonly bool IsReadOnly => false;
-
-        public void Add(TValue item) => throw new NotImplementedException();
-
-        public void Clear() => throw new NotImplementedException();
-
-        public void CopyTo(TValue[] array, int arrayIndex) => throw new NotImplementedException();
-
-        public bool Remove(TValue item) => throw new NotImplementedException();
-
-        public readonly bool Contains(TValue item) => this.linkedList.Contains(item);
-
-        public readonly IEnumerator<TValue> GetEnumerator() => this.linkedList.GetEnumerator();
-
-        readonly IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
     }
 }

@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 using global::Utils.Networking;
 using Hints;
@@ -13,11 +12,12 @@ using RueI.API.Elements;
 using RueI.API.Elements.Parameters;
 using RueI.API.Parsing.Modifications;
 using RueI.API.Parsing.Structs;
+using RueI.Utils;
 using RueI.Utils.Extensions;
-using Unity.Collections.LowLevel.Unsafe;
 
 /// <summary>
-/// Combines multiple <see cref="Elements.Element"/>s into a single <see cref="TextHint"/>.
+/// Combines multiple <see cref="Elements.Element"/>s into a single <see cref="TextHint"/>
+/// and sends it to a <see cref="ReferenceHub"/>.
 /// </summary>
 internal static class ElementCombiner
 {
@@ -33,53 +33,47 @@ internal static class ElementCombiner
 
     private static readonly CumulativeFloat CumulativeOffset = new();
     private static readonly CumulativeFloat SubOffset = new();
-    private static readonly List<NoBreakInfo> Nobreaks = new();
+    private static readonly List<NobreakInfo> Nobreaks = new();
     ////private static readonly List<List<Keyframe>> Keyframes = new();
     private static readonly List<ContentParameter> CurrentParameters = new();
 
+    private static readonly ParameterHandler ParameterHandler = new(Nobreaks);
+
+    /// <summary>
+    /// Combines an <see cref="Element"/> <see cref="IEnumerable{T}"/> and sends it to
+    /// a <see cref="ReferenceHub"/>.
+    /// </summary>
+    /// <param name="hub">The <see cref="ReferenceHub"/> to combine the <see cref="Element"/>s for and
+    /// to send the <see cref="TextHint"/> to.</param>
+    /// <param name="elements">The elements to combine.</param>
     internal static void Combine(ReferenceHub hub, IEnumerable<Element> elements)
     {
         using NetworkWriterPooled totalWriter = NetworkWriterPool.Get();
-
-        int paramIndex = 0;
 
         totalWriter.WriteUShort(NetworkMessageId<HintMessage>.Id);
         totalWriter.WriteByte(TextHintID);
         totalWriter.WriteInt(-1); // hint effects
 
-        int paramCountPos = totalWriter.Position;
-
-        totalWriter.WriteInt(0);
-
-        ////writer.WriteStringNoLength("<line-height=");
-        int paddedPos = totalWriter.Position;
-
-        ////writer.Write(PaddingBytes);
+        ParameterHandler.Setup(totalWriter);
 
         using NetworkWriterPooled contentWriter = NetworkWriterPool.Get();
+
+        // prevent any overflows from line breaking
+        contentWriter.WriteStringNoSize("<line-height=0>");
 
         CumulativeFloat lastPosition = CumulativeFloat.Invalid;
         CumulativeFloat lastOffset = default;
 
         bool isFirst = true;
 
+        CombinerContext context = new(contentWriter, Nobreaks, ParameterHandler);
+
         foreach (Element element in elements)
         {
-            int elemParamIndex = paramIndex;
-            int paramCount = element.ParameterList.Count;
-
-            // TODO: reverse (parameter list is read back to front while we want to read it front to back)
-            CurrentParameters.Clear();
-            CurrentParameters.EnsureCapacity(paramCount);
-            foreach (ContentParameter parameter in element.ParameterList)
+            if (element.Parameters != null)
             {
-                CurrentParameters.Add(parameter);
-
-                totalWriter.WriteByte((byte)parameter.HintParameterType);
-                parameter.Write(totalWriter);
+                ParameterHandler.SetElementParameters(element.Parameters);
             }
-
-            paramIndex += element.ParameterList.Count;
 
             ParsedData data = element.GetParsedData(hub);
             string text = data.ParsedString!; // TODO: remove null check
@@ -88,17 +82,15 @@ internal static class ElementCombiner
 
             if (element.AnimatedPosition != null)
             {
-                // TODO: add offset, make func pos
-                AddAnimatedParameter(totalWriter, element.AnimatedPosition.Value);
-
+                // TODO: add offset, make scaled pos
                 AnimatedParameter parameter = new(element.AnimatedPosition.Value);
 
                 position = new();
-                position.Add(new AnimatableFloat(parameter));
+                position.Add(PositionUtils.ScaledToBaselineParameter(parameter));
             }
             else
             {
-                position = new(element.Position);
+                position = new(PositionUtils.ScaledToBaseline(element.Position));
             }
 
             switch (element.VerticalAlign)
@@ -125,7 +117,7 @@ internal static class ElementCombiner
                 // TODO: check
                 CalculateOffset(lastPosition, lastOffset, position);
 
-                SubOffset.WriteAsLineHeight(contentWriter, totalWriter, CurrentParameters, Nobreaks, ref paramIndex);
+                SubOffset.WriteAsLineHeight(contentWriter, ParameterHandler, Nobreaks);
 
                 CumulativeOffset.Add(SubOffset);
             }
@@ -141,43 +133,10 @@ internal static class ElementCombiner
                 // TODO: make faster perhaps
                 contentWriter.WriteChars(SplitUntil(ref buffer, pos));
 
-                switch (current.Type)
-                {
-                    // TODO: rewrite as a class (what the fuck was i thinking?)
-                    case Modification.ModificationType.AdditionalBackslash:
-                        contentWriter.WriteChar('\\');
-                        break;
-                    case Modification.ModificationType.AdditionalForwardBracket:
-                        contentWriter.WriteChar('{');
-                        break;
-                    case Modification.ModificationType.AdditionalBackwardsBracket:
-                        contentWriter.WriteChar('}');
-                        break;
-                    case Modification.ModificationType.InsertNoparse:
-                        contentWriter.WriteStringNoSize("<noparse>");
-                        break;
-                    case Modification.ModificationType.InsertCloseNoparse:
-                        contentWriter.WriteStringNoSize("</noparse>");
-                        break;
-                    case Modification.ModificationType.FormatItem:
-                        contentWriter.WriteFormatItemNoBreak(elemParamIndex + current.AdditionalInfo, Nobreaks);
-                        break;
-                    case Modification.ModificationType.SkipNext:
-                        buffer = buffer[current.AdditionalInfo..];
-                        break;
-                    case Modification.ModificationType.DoNotBreakFor:
-                        int writerPosition = contentWriter.Position;
-
-                        Nobreaks.Add(new NoBreakInfo()
-                        {
-                            Start = writerPosition,
-                            End = writerPosition + current.AdditionalInfo,
-                        });
-
-                        break;
-                }
+                current.Apply(context, ref buffer);
             }
 
+            // write the remaining characters
             contentWriter.WriteChars(buffer);
 
             CumulativeOffset.Add(data.Offset);
@@ -189,7 +148,7 @@ internal static class ElementCombiner
 
         using NetworkWriterPooled offsetWriter = NetworkWriterPool.Get();
 
-        CumulativeOffset.WriteAsLineHeight(offsetWriter, totalWriter, CurrentParameters, Nobreaks, ref paramIndex);
+        CumulativeOffset.WriteAsLineHeight(offsetWriter, ParameterHandler, Nobreaks);
 
         // TODO: support offsetwriter for this
         int length = contentWriter.Position + offsetWriter.Position;
@@ -199,7 +158,7 @@ internal static class ElementCombiner
 
             contentWithParameterWriter.WriteNetworkWriter(offsetWriter, false);
 
-            CumulativeOffset.WriteAsLineHeight(contentWithParameterWriter, totalWriter, CurrentParameters, Nobreaks, ref paramIndex);
+            CumulativeOffset.WriteAsLineHeight(contentWithParameterWriter, ParameterHandler, Nobreaks);
 
             int pos = 0;
             int i = 0;
@@ -209,17 +168,30 @@ internal static class ElementCombiner
                 // TODO: rewrite this to be slightly less dumb
                 if (i < Nobreaks.Count)
                 {
-                    NoBreakInfo nobreak = Nobreaks[i];
+                    // get how much we can write before we encounter a linebreak
+                    NobreakInfo nobreak = Nobreaks[i];
                     int start = nobreak.Start;
-                    int maxForNobreak = start - pos;
+                    int end = nobreak.End;
+
+                    // "Hello|world|"
+                    //   ^   ^     ^
+                    //   1   5     11
+                    //  pos start  end
+                    // max = 5 - 1 = 4
+                    int maxWritable = start - pos;
 
                     // if false, the start of the nobreak is greater than what we can write in one pass
-                    if (maxForNobreak < MaxStringLength)
+                    // if that's the case, we just ignore it for now
+                    // otherwise, just write it as usual
+                    if (maxWritable < MaxStringLength)
                     {
-                        AddStringParameter(totalWriter, contentWithParameterWriter, contentWriter.buffer.AsSpan(pos, maxForNobreak), ref paramIndex);
-                        contentWithParameterWriter.WriteBytes(contentWriter.buffer.AsSpan(start, nobreak.End), false);
+                        ParameterHandler.AddStringParameter(contentWriter.buffer.AsSpan(pos, maxWritable));
 
-                        pos = nobreak.End;
+                        // write the text that we can't break during
+                        contentWithParameterWriter.WriteBytes(contentWriter.buffer.AsSpan(start, end - start), false);
+
+                        i++;
+                        pos = end;
 
                         continue;
                     }
@@ -227,7 +199,7 @@ internal static class ElementCombiner
 
                 int cap = Math.Min(length - pos, MaxStringLength);
 
-                AddStringParameter(totalWriter, contentWithParameterWriter, contentWriter.buffer.AsSpan(pos, cap), ref paramIndex);
+                ParameterHandler.AddStringParameter(contentWriter.buffer.AsSpan(pos, cap));
 
                 pos += cap;
             }
@@ -238,22 +210,21 @@ internal static class ElementCombiner
         else
         {
             // TODO: make sure we write cumulativeoffset at the correct spot / length
-            totalWriter.WriteUShort((ushort)(contentWriter.Position + offsetWriter.Position)); // write padding
+            totalWriter.WriteUShort((ushort)(contentWriter.Position + offsetWriter.Position));
 
             totalWriter.WriteNetworkWriter(offsetWriter, false);
             totalWriter.WriteNetworkWriter(contentWriter, false);
         }
 
-        int oldPos = totalWriter.Position;
+        ParameterHandler.Finish();
 
-        totalWriter.Position = paramCountPos;
-        totalWriter.WriteInt(paramIndex);
-
-        totalWriter.Position = oldPos;
-
+        // TODO: look into optimizing this further by reducing copies even more (directly add to batch, for example)
         hub.connectionToClient.Send(totalWriter.ToArraySegment());
     }
 
+    /// <summary>
+    /// Calculates the offset for two elements and places the result in <see cref="SubOffset"/>.
+    /// </summary>
     private static void CalculateOffset(CumulativeFloat hintOnePos, CumulativeFloat hintOneTotalLines, CumulativeFloat hintTwoPos)
     {
         SubOffset.Add(hintOneTotalLines);
@@ -261,22 +232,6 @@ internal static class ElementCombiner
         SubOffset.Add(hintOnePos);
         SubOffset.Subtract(hintTwoPos);
         SubOffset.Divide(2);
-    }
-
-    private static void AddAnimatedParameter(NetworkWriter writer, AnimatedValue parameter)
-    {
-        writer.WriteByte(AnimatedParameterID);
-        writer.WriteDouble(0); // offset
-        writer.WriteString(null); // format
-        writer.WriteBool(false); // integral
-        parameter.Write(writer);
-    }
-
-    private static void AddStringParameter(NetworkWriter paramWriter, NetworkWriter newContentWriter, ReadOnlySpan<byte> bytes, ref int parameterIndex)
-    {
-        paramWriter.WriteByte(StringParameterID);
-        paramWriter.WriteBytes(bytes, writeSize: true);
-        newContentWriter.WriteFormatItem(parameterIndex++);
     }
 
     private static ReadOnlySpan<T> SplitUntil<T>(scoped ref ReadOnlySpan<T> span, int position)

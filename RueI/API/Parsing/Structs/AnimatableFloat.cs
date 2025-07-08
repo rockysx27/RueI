@@ -51,6 +51,10 @@ internal struct AnimatableFloat
         this.AbsoluteValue = abs;
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AnimatableFloat"/> struct.
+    /// </summary>
+    /// <param name="param">The parameter to use.</param>
     internal AnimatableFloat(AnimatedParameter param)
     {
         this.Parameter = param;

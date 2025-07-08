@@ -2,22 +2,32 @@
 
 using System;
 using Mirror;
-using RueI.API.Parsing.Structs;
 using RueI.Utils.Extensions;
 
+/// <summary>
+/// Represents a modification that adds a tag.
+/// </summary>
 internal class TagModification : SkipNextModification
 {
-    private string tagName;
-    private float value;
+    private readonly string tagName;
+    private readonly float value;
 
-    internal TagModification(string tagName, int skipCount, float value)
-        : base(skipCount)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TagModification"/> class.
+    /// </summary>
+    /// <param name="position">The position to add the <see cref="TagModification"/> at.</param>
+    /// <param name="skipCount"><inheritdoc cref="SkipNextModification(int, int)" path="/param[@name='skipCount']"/></param>
+    /// <param name="tagName">The name of the tag.</param>
+    /// <param name="value">The value of the tag.</param>
+    internal TagModification(int position, int skipCount, string tagName, float value)
+        : base(position, skipCount)
     {
         this.tagName = tagName;
         this.value = value;
     }
 
-    internal override void Apply(ParserContext context, ref Span<char> buffer)
+    /// <inheritdoc/>
+    internal override void Apply(CombinerContext context, ref ReadOnlySpan<char> buffer)
     {
         NetworkWriter writer = context.ContentWriter;
 

@@ -20,7 +20,7 @@ internal static class TagHelpers
     {
         '/' => '/',
         '-' => '-',
-        _ => (char)(ch & LowercaseMask), // TODO: check to make sure this works
+        _ => (char)(ch | LowercaseMask),
     };
 
     /// <summary>
@@ -49,7 +49,7 @@ internal static class TagHelpers
 
         if (!decimalPart.IsEmpty)
         {
-            value += float.Parse(integerPart, Style) / Mathf.Pow(10, decimalPart.Length);
+            value += float.Parse(decimalPart, Style) / Mathf.Pow(10, decimalPart.Length);
         }
 
         return value;

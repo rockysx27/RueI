@@ -13,7 +13,7 @@ using RueI.Utils.Extensions;
 /// </summary>
 internal struct CumulativeFloat
 {
-    private StructList<AnimatableFloat> curves = new();
+    private RefList<AnimatableFloat> curves = new();
     private float value;
 
     /// <summary>
@@ -62,9 +62,9 @@ internal struct CumulativeFloat
     /// <param name="cumulativeFloat">The <see cref="CumulativeFloat"/> to subtract.</param>
     public void Subtract(CumulativeFloat cumulativeFloat)
     {
-        this.curves.AddCapacity(cumulativeFloat.curves.Length);
+        this.curves.AddCapacity(cumulativeFloat.curves.Count);
 
-        for (int i = 0; i < cumulativeFloat.curves.Length; i++)
+        for (int i = 0; i < cumulativeFloat.curves.Count; i++)
         {
             ref AnimatableFloat animatableFloat = ref cumulativeFloat.curves[i];
 
@@ -74,6 +74,10 @@ internal struct CumulativeFloat
         this.value -= cumulativeFloat.value;
     }
 
+    /// <summary>
+    /// Adds a <see cref="AnimatableFloat"/> to the <see cref="CumulativeFloat"/>.
+    /// </summary>
+    /// <param name="value">The <see cref="AnimatableFloat"/> to add.</param>
     public void Add(in AnimatableFloat value)
     {
         if (value.IsAnimated)
@@ -86,18 +90,10 @@ internal struct CumulativeFloat
         }
     }
 
-    public void AddTransformed(in AnimatableFloat value, float multiplier, float addend)
-    {
-        if (value.IsAnimated)
-        {
-            this.curves.Add(in value);
-        }
-        else
-        {
-            this.value += value.AddendOrValue;
-        }
-    }
-
+    /// <summary>
+    /// Subtracts a <see cref="AnimatableFloat"/> from the <see cref="CumulativeFloat"/>.
+    /// </summary>
+    /// <param name="value">The <see cref="AnimatableFloat"/> to subtract.</param>
     public void Subtract(in AnimatableFloat value)
     {
         if (value.IsAnimated)
@@ -125,7 +121,7 @@ internal struct CumulativeFloat
     /// <param name="value">The <see langword="float"/> to divide by.</param>
     public void Divide(float value)
     {
-        for (int i = 0; i < this.curves.Length; i++)
+        for (int i = 0; i < this.curves.Count; i++)
         {
             this.curves[i].Multiplier /= value;
             this.curves[i].AddendOrValue /= value;
@@ -140,7 +136,7 @@ internal struct CumulativeFloat
     /// <param name="value">The <see langword="float"/> to multiply by.</param>
     public void Multiply(float value)
     {
-        for (int i = 0; i < this.curves.Length; i++)
+        for (int i = 0; i < this.curves.Count; i++)
         {
             this.curves[i].Multiplier *= value;
             this.curves[i].AddendOrValue *= value;
@@ -158,14 +154,20 @@ internal struct CumulativeFloat
         this.value = 0;
     }
 
+    /// <summary>
+    /// Writes this <see cref="CumulativeFloat"/> as a series of line-height tags and linebreaks.
+    /// </summary>
+    /// <param name="writer">The <see cref="NetworkWriter"/> to write to.</param>
+    /// <param name="paramHandler">The <see cref="ParameterHandler"/> of the <see cref="ElementCombiner"/>.</param>
+    /// <param name="nobreaks">A <see cref="List{T}"/> for the position of nobreaks.</param>
     public readonly void WriteAsLineHeight(
         NetworkWriter writer,
         ParameterHandler paramHandler,
-        List<NoBreakInfo> nobreaks)
+        List<NobreakInfo> nobreaks)
     {
-        if (this.curves.Length != 0) // uncommon path
+        if (this.curves.Count != 0) // uncommon path
         {
-            for (int i = 0; i < this.curves.Length; i++)
+            for (int i = 0; i < this.curves.Count; i++)
             {
                 ref AnimatableFloat animatableFloat = ref this.curves[i];
 

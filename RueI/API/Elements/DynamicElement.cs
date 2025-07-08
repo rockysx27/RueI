@@ -12,10 +12,10 @@ public class DynamicElement : Element
     /// <summary>
     /// Initializes a new instance of the <see cref="DynamicElement"/> class.
     /// </summary>
+    /// <param name="position"><inheritdoc cref="Element(float)" path="/param[@name='position']"/></param>
     /// <param name="contentGetter">A <see cref="Func{T, TResult}"/> that takes in a <see cref="ReferenceHub"/>
     /// and returns a <see langword="string"/> to use for the content.</param>
-    /// <param name="position"><inheritdoc cref="Element(float)" path="/param[@name='position']"/></param>
-    public DynamicElement(Func<ReferenceHub, string> contentGetter, float position)
+    public DynamicElement(float position, Func<ReferenceHub, string> contentGetter)
         : base(position)
     {
         this.ContentGetter = contentGetter ?? throw new ArgumentNullException(nameof(contentGetter));
@@ -24,9 +24,9 @@ public class DynamicElement : Element
     /// <summary>
     /// Initializes a new instance of the <see cref="DynamicElement"/> class.
     /// </summary>
-    /// <param name="contentGetter">A <see cref="Func{TResult}"/> that returns a <see langword="string"/> to use for the content.</param>
     /// <param name="position"><inheritdoc cref="Element(float)" path="/param[@name='position']"/></param>
-    public DynamicElement(Func<string> contentGetter, float position)
+    /// <param name="contentGetter">A <see cref="Func{TResult}"/> that returns a <see langword="string"/> to use for the content.</param>
+    public DynamicElement(float position, Func<string> contentGetter)
         : base(position)
     {
         if (contentGetter == null)
@@ -43,5 +43,5 @@ public class DynamicElement : Element
     protected Func<ReferenceHub, string> ContentGetter { get; }
 
     /// <inheritdoc/>
-    protected internal override ParsedData GetParsedData(ReferenceHub hub) => Parser.Parse(element: this.ContentGetter(hub));
+    protected internal override ParsedData GetParsedData(ReferenceHub hub) => Parser.Parse(this.ContentGetter(hub), this);
 }

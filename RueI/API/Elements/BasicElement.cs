@@ -9,7 +9,7 @@ using RueI.API.Parsing;
 /// </summary>
 /// <remarks>
 /// As its name suggests, the <see cref="BasicElement"/> is a simple element
-/// that is good enough for most use cases. TODO: make this doc better
+/// that is good enough for most use cases.
 /// </remarks>
 public class BasicElement : Element
 {
@@ -19,9 +19,9 @@ public class BasicElement : Element
     /// <summary>
     /// Initializes a new instance of the <see cref="BasicElement"/> class.
     /// </summary>
-    /// <param name="content">The content of the element.</param>
     /// <param name="position">The position of the element.</param>
-    public BasicElement(string content, float position)
+    /// <param name="content">The content of the element.</param>
+    public BasicElement(float position, string content)
         : base(position)
     {
         if (content is null)
@@ -35,10 +35,8 @@ public class BasicElement : Element
     /// <inheritdoc/>
     protected internal sealed override ParsedData GetParsedData(ReferenceHub hub)
     {
-        if (!this.parsedData.HasValue)
-        {
-            parsedData = Parser.Parse(content, this);
-            content = null;
-        }
+        this.parsedData ??= Parser.Parse(this.content, this);
+
+        return this.parsedData.Value;
     }
 }

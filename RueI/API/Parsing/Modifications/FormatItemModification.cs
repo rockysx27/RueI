@@ -1,22 +1,32 @@
 ﻿namespace RueI.API.Parsing.Modifications;
 
 using System;
-using Mirror;
+
 using RueI.Utils.Extensions;
 
+/// <summary>
+/// Represents a <see cref="Modification"/> that adds a format item.
+/// </summary>
 internal class FormatItemModification : SkipNextModification
 {
     private readonly int paramId;
 
-    internal FormatItemModification(int paramId, int count)
-        : base(count)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FormatItemModification"/> class.
+    /// </summary>
+    /// <param name="position">The position to add the <see cref="FormatItemModification"/> at.</param>
+    /// <param name="skipCount"><inheritdoc cref="SkipNextModification(int, int)" path="/param[@name='skipCount']"/></param>
+    /// <param name="paramId">The ID of the parameter (e.g. the 0 in {0}).</param>
+    internal FormatItemModification(int position, int skipCount, int paramId)
+        : base(position, skipCount)
     {
         this.paramId = paramId;
     }
 
-    internal override void Apply(ParserContext context, ref Span<char> buffer)
+    /// <inheritdoc/>
+    internal override void Apply(CombinerContext context, ref ReadOnlySpan<char> buffer)
     {
-        int index = context.ParameterHandler.GetMappedElementParameterId(this.paramId);
+        int index = context.ParameterHandler.MappedElementParameterId(this.paramId);
 
         context.ContentWriter.WriteFormatItemNoBreak(index, context.Nobreaks);
 

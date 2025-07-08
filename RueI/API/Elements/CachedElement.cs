@@ -17,13 +17,11 @@ internal class CachedElement : DynamicElement
     /// <summary>
     /// Initializes a new instance of the <see cref="CachedElement"/> class.
     /// </summary>
-    /// <param name="contentGetter"><inheritdoc cref="DynamicElement(Func{string}, float)" path="/param[@name='contentGetter']"/></param>
-    /// <param name="cacheTime">A <see cref="TimeSpan"/> indicating how long to store
-    /// cached text before regenerating.
-    /// </param>
-    /// <param name="position"><inheritdoc cref="DynamicElement(Func{string}, float)" path="/param[@name='position']"/></param>
-    public CachedElement(Func<string> contentGetter, TimeSpan cacheTime, float position)
-        : base(contentGetter, position)
+    /// <param name="cacheTime">A <see cref="TimeSpan"/> indicating how long to store cached text before regenerating.</param>
+    /// <param name="position"><inheritdoc cref="DynamicElement(float, Func{string})" path="/param[@name='position']"/></param>
+    /// <param name="contentGetter"><inheritdoc cref="DynamicElement(float, Func{string})" path="/param[@name='contentGetter']"/></param>
+    public CachedElement(float position, TimeSpan cacheTime, Func<string> contentGetter)
+        : base(position, contentGetter)
     {
         this.CacheTime = cacheTime;
     }

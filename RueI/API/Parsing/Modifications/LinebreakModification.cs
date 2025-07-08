@@ -4,35 +4,40 @@ using System;
 using System.Text;
 using RueI.Utils.Extensions;
 
+/// <summary>
+/// Represents a modification that adds a line height tag with a certain value.
+/// </summary>
 internal abstract class LinebreakModification : SkipNextModification
 {
-    private static readonly byte[] PrefixBytes;
-    private static readonly byte[] SuffixBytes;
+    private const string Prefix = "<line-height=";
+    private const string Suffix = "e>\n<line-height=0>";
 
-    static LinebreakModification()
-    {
-        const string Prefix = "<line-height=";
-        const string Suffix = "e>\n</line-height>";
+    private static readonly byte[] PrefixBytes = Encoding.UTF8.GetBytes(Prefix);
+    private static readonly byte[] SuffixBytes = Encoding.UTF8.GetBytes(Suffix);
 
-        Encoding encoding = Encoding.UTF8;
-
-        PrefixBytes = encoding.GetBytes(Prefix);
-        SuffixBytes = encoding.GetBytes(Suffix);
-    }
-
-    internal LinebreakModification(int skipCount)
-        : base(skipCount)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LinebreakModification"/> class.
+    /// </summary>
+    /// <param name="position">The position to add the <see cref="LinebreakModification"/> at.</param>
+    /// <param name="skipCount"><inheritdoc cref="SkipNextModification(int, int)" path="/param[@name='skipCount']"/></param>
+    internal LinebreakModification(int position, int skipCount)
+        : base(position, skipCount)
     {
     }
 
-    internal override void Apply(ParserContext context, ref Span<char> buffer)
+    /// <inheritdoc/>
+    internal override void Apply(CombinerContext context, ref ReadOnlySpan<char> buffer)
     {
         context.ContentWriter.WriteBytes(PrefixBytes, false);
-        this.WriteValue(context);
+        this.WriteLineHeightValue(context);
         context.ContentWriter.WriteBytes(SuffixBytes, false);
 
         base.Apply(context, ref buffer);
     }
 
-    protected abstract void WriteValue(ParserContext context);
+    /// <summary>
+    /// Writes the value of the line-height tag for this <see cref="LinebreakModification"/>.
+    /// </summary>
+    /// <param name="context">The context of the <see cref="ElementCombiner"/>.</param>
+    protected abstract void WriteLineHeightValue(CombinerContext context);
 }

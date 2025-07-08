@@ -131,7 +131,10 @@ public static class HintBuilding
     /// </remarks>
     public static string Sanitize(string str)
     {
-        return "<noparse>" + str.Replace("<noparse>", "<nopa‌rse>") + "</noparse>"; // zero width non joiner
+        const string Replacement = "nopa‌rse"; // zero width non-joiner added
+
+        // ignore case, since </Noparse is valid
+        return "<noparse>" + str.Replace("/noparse", Replacement, System.StringComparison.OrdinalIgnoreCase) + "</noparse>";
     }
 
     /// <summary>
@@ -332,11 +335,11 @@ public static class HintBuilding
     /// <param name="r">The red (0-255) in the color.</param>
     /// <param name="g">The green (0-255) in the color.</param>
     /// <param name="b">The blue (0-255) in the color.</param>
-    /// <param name="alpha">The optional alpha (0-255) of the color.</param>
+    /// <param name="a">The optional alpha (0-255) of the color.</param>
     /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
-    public static StringBuilder SetColor(this StringBuilder sb, int r, int g, int b, int alpha = 255)
+    public static StringBuilder SetColor(this StringBuilder sb, int r, int g, int b, int a = 255)
     {
-        Color color = Color.FromArgb(alpha, r, g, b);
+        Color color = Color.FromArgb(a, r, g, b);
         return sb.SetColor(color);
     }
 
@@ -366,11 +369,11 @@ public static class HintBuilding
     /// <param name="r">The red (0-255) in the color.</param>
     /// <param name="g">The green (0-255) in the color.</param>
     /// <param name="b">The blue (0-255) in the color.</param>
-    /// <param name="alpha">The alpha (0-255) of the color.</param>
+    /// <param name="a">The alpha (0-255) of the color.</param>
     /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
-    public static StringBuilder SetMark(this StringBuilder sb, int r, int g, int b, int alpha)
+    public static StringBuilder SetMark(this StringBuilder sb, int r, int g, int b, int a)
     {
-        Color color = Color.FromArgb(alpha, r, g, b);
+        Color color = Color.FromArgb(a, r, g, b);
         return sb.SetMark(color);
     }
 
@@ -686,7 +689,7 @@ public static class HintBuilding
         {
             MeasurementUnit.Percentage => PERCENT,
             MeasurementUnit.Ems => EMS,
-            _ => string.Empty, // efault is p
+            _ => string.Empty, // default is pixels
         };
 
         return sb.Append('<')

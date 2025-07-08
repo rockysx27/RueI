@@ -88,12 +88,12 @@ internal static class NetworkWriterSpanExtensions
     }
 
     /// <summary>
-    /// Writes a format item and adds a <see cref="NoBreakInfo"/>.
+    /// Writes a format item and adds a <see cref="NobreakInfo"/>.
     /// </summary>
     /// <param name="writer">The writer to write to.</param>
     /// <param name="i">The ID of the format item.</param>
-    /// <param name="nobreaks">A <see cref="List{T}"/> to add the <see cref="NoBreakInfo"/> to.</param>
-    internal static void WriteFormatItemNoBreak(this NetworkWriter writer, int i, List<NoBreakInfo> nobreaks)
+    /// <param name="nobreaks">A <see cref="List{T}"/> to add the <see cref="NobreakInfo"/> to.</param>
+    internal static void WriteFormatItemNoBreak(this NetworkWriter writer, int i, List<NobreakInfo> nobreaks)
     {
         int start = writer.Position;
 
@@ -107,7 +107,7 @@ internal static class NetworkWriterSpanExtensions
     }
 
     /// <summary>
-    /// Writes a format item without adding a <see cref="NoBreakInfo"/>.
+    /// Writes a format item without adding a <see cref="NobreakInfo"/>.
     /// </summary>
     /// <param name="writer">The writer to write to.</param>
     /// <param name="i">The ID of the format item.</param>

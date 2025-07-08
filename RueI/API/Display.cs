@@ -3,12 +3,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using LabApi.Features.Wrappers;
-
+using RoundRestarting;
 using RueI.API.Elements;
 using RueI.API.Parsing;
 using RueI.Utils.Collections;
 using RueI.Utils.Extensions;
+
 using UnityEngine;
 
 /// <summary>
@@ -21,26 +23,12 @@ public sealed class Display
 {
     private static readonly Dictionary<ReferenceHub, Display> Displays = new();
 
-    private readonly ValueSortedDictionary<Tag, StoredElement> elements = new(ValueSortedDictionary<Tag, StoredElement>.InsertionBehavior.InsertAfterEqual);
+    private readonly ValueSortedDictionary<Tag, StoredElement> elements = new();
+    private readonly MinHeap<Tag, float> expirationHeap = new();
     private readonly ReferenceHub hub;
 
     private bool updateNextFrame = false;
-
-    static Display()
-    {
-        StaticUnityMethods.OnUpdate += () =>
-        {
-            foreach (Display display in Displays.Values)
-            {
-                if (display.updateNextFrame)
-                {
-                    display.updateNextFrame = false;
-
-                    display.Update();
-                }
-            }
-        };
-    }
+    private float forcedUpdate = float.PositiveInfinity;
 
     private Display(ReferenceHub hub)
     {
@@ -85,7 +73,7 @@ public sealed class Display
     public void Add(Tag tag, Element element) => this.Add(
         tag ?? throw new ArgumentNullException(nameof(tag)),
         element ?? throw new ArgumentNullException(nameof(element)),
-        float.PositiveInfinity);
+        float.NaN);
 
     /// <summary>
     /// Adds an <see cref="Element"/> with a unique <see cref="Tag"/> to this <see cref="Display"/> for a certain period of time.
@@ -111,29 +99,141 @@ public sealed class Display
         element ?? throw new ArgumentNullException(nameof(element)),
         Time.time + (float)duration.TotalSeconds);
 
+    /// <summary>
+    /// Removes the element with the given tag from the <see cref="Display"/>, if there is one.
+    /// </summary>
+    /// <param name="tag">The tag for which remove the associated <see cref="Element"/>.</param>
+    public void Remove(Tag tag)
+    {
+        if (this.elements.Remove(tag, out StoredElement element))
+        {
+            if (element.HeapNode != null)
+            {
+                this.expirationHeap.Remove(element.HeapNode);
+            }
+
+            // if there's a forced update (i.e. another hint is hiding RueI,
+            // there's no reason to update the display just to remove one hint
+            // (since it's already not visible)
+            if (!float.IsPositiveInfinity(this.forcedUpdate))
+            {
+                this.updateNextFrame = true;
+            }
+        }
+
+        // no need to update if we didn't actually remove anything
+    }
+
+    /// <summary>
+    /// Updates the display, refreshing any <see cref="DynamicElement"/>.
+    /// </summary>
+    public void Update()
+    {
+        this.updateNextFrame = true;
+    }
+
+    /// <summary>
+    /// Registers the <see cref="Display"/> events.
+    /// </summary>
+    internal static void RegisterEvents()
+    {
+        // i use the base game alternatives because these are
+        // more lightweight
+        StaticUnityMethods.OnUpdate += CheckDisplays;
+        ReferenceHub.OnPlayerRemoved += RemoveHub;
+        RoundRestart.OnRestartTriggered += Displays.Clear;
+    }
+
+    /// <summary>
+    /// Unregisters the <see cref="Display"/> events.
+    /// </summary>
+    internal static void UnregisterEvents()
+    {
+        StaticUnityMethods.OnUpdate -= CheckDisplays;
+        ReferenceHub.OnPlayerRemoved -= RemoveHub;
+        RoundRestart.OnRestartTriggered -= Displays.Clear;
+    }
+
+    /// <summary>
+    /// Updates the display after the given number of seconds.
+    /// </summary>
+    /// <param name="duration">The time to wait before updating.</param>
+    internal void SetUpdateIn(float duration)
+    {
+        this.forcedUpdate = Time.time + duration;
+    }
+
+    // not a lambda so we can later unregister
+    private static void RemoveHub(ReferenceHub hub) => Displays.Remove(hub);
+
+    private static void CheckDisplays()
+    {
+        float time = Time.time;
+
+        foreach (Display display in Displays.Values)
+        {
+            if (display.forcedUpdate < time)
+            {
+                display.updateNextFrame = true;
+            }
+
+            if (display.updateNextFrame)
+            {
+                display.FrameUpdate();
+
+                display.updateNextFrame = false;
+            }
+
+            while (display.expirationHeap.TryPeek(out var node) && node.Priority < time)
+            {
+                display.expirationHeap.Pop();
+                display.elements.Remove(node.Value);
+
+                display.updateNextFrame = true;
+            }
+        }
+    }
+
     private void Add(Tag tag, Element element, float expireAt)
     {
-        this.elements[tag] = new()
+        if (float.IsNaN(expireAt))
         {
-            Element = element,
-            ExpireAt = expireAt,
-        };
+            var node = this.expirationHeap.Add(tag, expireAt);
+
+            this.elements[tag] = new()
+            {
+                Element = element,
+                Tag = tag,
+                HeapNode = node,
+            };
+        }
+        else
+        {
+            this.elements[tag] = new()
+            {
+                Element = element,
+                Tag = tag,
+            };
+        }
 
         this.updateNextFrame = true;
     }
 
-    private void Update()
+    private void FrameUpdate()
     {
-        ElementCombiner.Combine(this.hub, this.elements.FilterOut(x => x.Value.ExpireAt < Time.time).Select(x => x.Element));
+        ElementCombiner.Combine(this.hub, this.elements.Select(x => x.Value.Element)); // we don't use elements.Value, since that boxes (no way around it)
+
+        this.updateNextFrame = false;
+        this.forcedUpdate = float.PositiveInfinity;
     }
 
     private struct StoredElement : IComparable<StoredElement>
     {
-        public float ExpireAt;
-
         public Element Element;
 
         public Tag Tag;
+
+        public MinHeap<Tag, float>.Node? HeapNode;
 
         public override readonly int GetHashCode() => this.Tag.GetHashCode();
 

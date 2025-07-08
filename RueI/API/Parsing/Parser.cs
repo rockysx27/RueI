@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 using RueI.API.Elements;
@@ -17,8 +18,6 @@ using RueI.Utils;
 using RueI.Utils.Collections;
 using RueI.Utils.Enums;
 using RueI.Utils.Extensions;
-
-using static RueI.API.Parsing.Modifications.Modification;
 
 /// <summary>
 /// Parses <see cref="Element"/>s into <see cref="ParsedData"/>.
@@ -32,7 +31,7 @@ internal static class Parser
     private static readonly CumulativeFloat Offset = new();
 
     private static readonly char[] CharBuffer = new char[Constants.MaxTagLength];
-    private static readonly List<ContentParameter> CurrentParameters = new();
+    private static readonly IReadOnlyList<ContentParameter> CurrentParameters = null!; // safe, since we only access inside Parse (which sets this)
     private static readonly List<Modification> Modifications = new();
 
     private static readonly Trie<RichTextTag> TagTrie = new(new[]
@@ -53,7 +52,7 @@ internal static class Parser
         ("cr", '\r'),
         ("nbsp", '\u00a0'), // non breaking space
         ("zwsp", '\u200b'),
-        ("zwj", '\u00AD'), // zwj
+        ("zwj", '\u00AD'),
         ("shy", '\u00AD'),
     });
 
@@ -83,14 +82,6 @@ internal static class Parser
         noparseParsesEscapeSeq = element.NoparseSettings.HasFlagFast(Elements.Enums.NoparseSettings.ParsesEscapeSequences);
         noparseParsesFormat = element.NoparseSettings.HasFlagFast(Elements.Enums.NoparseSettings.ParsesFormatItems);
 
-        // TODO: support infinite
-        CurrentParameters.EnsureCapacity(element.ParameterList.Count);
-
-        foreach (ContentParameter parameter in element.ParameterList)
-        {
-            CurrentParameters.Add(parameter);
-        }
-
         while (TryGetNext(out char ch))
         {
             HandleChar(ch);
@@ -111,7 +102,6 @@ internal static class Parser
 
         lineHeight = AnimatableFloat.Invalid;
 
-        CurrentParameters.Clear();
         Modifications.Clear();
     }
 
@@ -135,16 +125,16 @@ internal static class Parser
 
     private static bool TryParseTag()
     {
-        const int MaxTagNameLength = 15; // stop trying to parse as a tag if the name is too long (</line-height> is 14 characters)
+        // keep track of count to ensure that our total size is less than Constants.MaxTagSize
+        int startPos = position;
 
-        int count = 0;
-        int max = position + MaxTagNameLength;
+        int Count() => position - startPos + 1; // + 1 to include >
 
         //// int start = ++position;
 
         Trie<RichTextTag>.RadixNode? node = TagTrie.Root;
 
-        while (TryGetNext(out char ch) && position < max)
+        while (TryGetNext(out char ch))
         {
             RichTextTag tag = node.Value;
 
@@ -169,7 +159,7 @@ internal static class Parser
 
                             while (TryGetNext(out ch))
                             {
-                                if (++count > Constants.MaxTagLength)
+                                if (Count() > Constants.MaxTagLength)
                                 {
                                     BreakTag();
 
@@ -209,6 +199,8 @@ internal static class Parser
                                 case RichTextTag.CloseNoparse:
                                     noparse = false;
                                     break;
+                                default:
+                                    return true;
                             }
 
                             return true;
@@ -218,32 +210,53 @@ internal static class Parser
                 {
                     if (ch != '=')
                     {
+                        // we've landed on a valid tag that takes a parameter,
+                        // but the next char isn't =
+                        // handle it since it could be something like a linebreak
                         HandleChar(ch);
 
                         return false;
                     }
 
-                    int pos = position - 1;
+                    int oldPos = position;
 
-                    if (TryParseMeasurements(count, out MeasurementInfo info))
+                    if (TryParseMeasurements(Count(), out MeasurementInfo info))
                     {
+                        AnimatableFloat value = default;
+
                         switch (tag)
                         {
                             case RichTextTag.LineHeight:
-                                lineHeight = info.ToAnimatableFloat(Constants.DefaultLineHeight);
+                                lineHeight = value = info.ToAnimatableFloat(Constants.DefaultLineHeight);
                                 break;
                             case RichTextTag.Size:
                                 float add = info.AddType != MeasurementInfo.AdditionType.Default && info.Unit == MeasurementUnit.Pixels ? Constants.EmSize : 0;
-                                SizeStack.Push(info.ToAnimatableFloat(Constants.EmSize, add));
+                                value = info.ToAnimatableFloat(Constants.EmSize, add);
+
+                                SizeStack.Push(value);
 
                                 break;
                             case RichTextTag.VOffset:
                                 // TODO: support voffset
                                 return false;
                         }
+
+                        string tagName = text[(startPos + 1)..oldPos];
+                        int count = Count();
+
+                        if (value.IsAnimated)
+                        {
+                            Modifications.Add(new AnimatedTagModification(startPos, count, tagName, in value)); // TODO: check for off by one errors
+                        }
+                        else
+                        {
+                            Modifications.Add(new TagModification(startPos, count, tagName, value.AddendOrValue)); // TODO: check for off by one errors
+                        }
+
+                        return true;
                     }
 
-                    position = pos;
+                    position = oldPos;
 
                     return false;
                 }
@@ -257,7 +270,6 @@ internal static class Parser
             }
 
             position++;
-            count++;
         }
 
         return false;
@@ -272,21 +284,18 @@ internal static class Parser
             switch (cur)
             {
                 case '{':
-                    Modifications.Add(new Modification(ModificationType.AdditionalForwardBracket, position));
-                    Modifications.Add(new Modification(ModificationType.DoNotBreakFor, position, 2));
-                    num = -1;
-
-                    return true;
+                    Modifications.Add(new CharModification(position, '{', true));
+                    break;
                 case '}':
-                    Modifications.Add(new Modification(ModificationType.AdditionalBackwardsBracket, position));
-                    Modifications.Add(new Modification(ModificationType.DoNotBreakFor, position, 2));
-                    num = -1;
-
-                    return true;
+                    Modifications.Add(new CharModification(position, '}', true));
+                    break;
+                default:
+                    Unsafe.SkipInit(out num);
+                    return false;
             }
 
-            Unsafe.SkipInit(out num);
-            return false;
+            num = -1;
+            return true;
         }
 
         // TODO: handle singular { or }
@@ -298,7 +307,7 @@ internal static class Parser
             {
                 if (text[position] == '{')
                 {
-                    Modifications.Add(new Modification(ModificationType.DoNotBreakFor, position - 1, 2));
+                    Modifications.Add(new NobreakModification(position, 2));
 
                     num = -1;
 
@@ -325,10 +334,9 @@ internal static class Parser
                     {
                         if (result >= CurrentParameters.Count)
                         {
-                            Modifications.Add(new Modification(ModificationType.InvalidFormatItem, start, length));
-                            Modifications.Add(new Modification(ModificationType.DoNotBreakFor, start, length));
+                            Modifications.Add(new InvalidFormatItemModification(position, length + 1)); // TODO: check for potential off by one errors
 
-                            // doesn't really matter what we do hereW
+                            // doesn't really matter what we do here
                             Unsafe.SkipInit(out num);
                             return false;
                         }
@@ -338,8 +346,7 @@ internal static class Parser
 
                         // TODO: add skip for to tag
                         // TODO: opposite index
-                        Modifications.Add(new Modification(ModificationType.FormatItem, start, index));
-                        Modifications.Add(new Modification(ModificationType.DoNotBreakFor, start, length));
+                        Modifications.Add(new FormatItemModification(position, length + 1, index)); // TODO: check for potential off by one errors
                         num = index;
 
                         return true;
@@ -354,7 +361,7 @@ internal static class Parser
         }
         else if (cur == '}' && MoveNext() && text[position] == '}')
         {
-            Modifications.Add(new Modification(ModificationType.DoNotBreakFor, position - 1, 2));
+            Modifications.Add(new NobreakModification(position, 2));
             num = -1;
 
             return true;
@@ -369,7 +376,6 @@ internal static class Parser
         // TODO: support weird leading tag shit
         // TODO: break if too many spaces, support otehr weird space shit
         const MeasurementUnit NotSet = (MeasurementUnit)(-1);
-        const MeasurementUnit SpaceMeasurement = (MeasurementUnit)(-2);
 
         MeasurementUnit unit = NotSet;
 
@@ -386,7 +392,7 @@ internal static class Parser
 
         bool MoveNextMeasurement()
         {
-            if (TryGetNext(out ch) && ++count < Constants.MaxTagLength)
+            if (TryGetNext(out ch) && ++count <= Constants.MaxTagLength) // TODO: check
             {
                 return true;
             }
@@ -578,8 +584,10 @@ internal static class Parser
 
         if (noparse && !noparseParsesEscapeSeq)
         {
-            // in noparse and noparse doesn't add escape seq, so add an additional backslash
-            Modifications.Add(new(ModificationType.AdditionalBackslash, position));
+            // additional backslash to ensure the escape sequence isn't handled
+            // even if we have something <noparse>\\n</noparse>, we add two backslashes so the \n is
+            // never parsed
+            Modifications.Add(new CharModification(position, '\\', false)); // TODO: check for potential off by one errors
 
             ch = '\\';
 
@@ -610,16 +618,19 @@ internal static class Parser
                     ch = '\r';
                     return true;
                 case 'U': // TODO: handle \U
-                    Modifications.Add(new(ModificationType.AdditionalBackslash, position));
+                    Modifications.Add(new CharModification(position, '\\', false)); // TODO: check for potential off by one errors
                     ch = '\\';
                     return true;
                 case 'u':
-                    if (++newPos + 4 < text.Length)
+                    // newPos is currently at |u, move to u|
+                    const int UnicodeLiteralSize = 4;
+
+                    if (++newPos + (UnicodeLiteralSize - 1) < text.Length)
                     {
-                        if (int.TryParse(text.AsSpan(newPos, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value))
+                        if (int.TryParse(text.AsSpan(newPos, UnicodeLiteralSize), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value))
                         {
                             // TODO: check
-                            position = newPos + 4;
+                            position = newPos + UnicodeLiteralSize - 1;
                             ch = (char)value;
 
                             return true;
@@ -637,8 +648,14 @@ internal static class Parser
 
     private static void BreakTag()
     {
-        ModificationType type = noparse ? ModificationType.InsertNoparse : ModificationType.InsertCloseNoparse;
-        Modifications.Add(new Modification(type, position - 1));
+        if (noparse)
+        {
+            Modifications.Add(new NoparseModification(position - 1));
+        }
+        else
+        {
+            Modifications.Add(new CloseNoparseModification(position - 1));
+        }
     }
 
     private static void AddLinebreak()
@@ -657,13 +674,6 @@ internal static class Parser
         {
             Offset.Add(Constants.DefaultLineHeight);
         }
-    }
-
-    private ref struct TagInfo
-    {
-        public ReadOnlySpan<char> TagName;
-
-        public MeasurementInfo? Info;
     }
 
     private struct MeasurementInfo

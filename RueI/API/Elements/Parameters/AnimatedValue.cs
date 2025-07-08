@@ -136,6 +136,8 @@ public readonly struct AnimatedValue : IEnumerable<Keyframe>
     /// Writes this <see cref="AnimatedValue"/> to a <see cref="NetworkWriter"/>.
     /// </summary>
     /// <param name="writer">The <see cref="NetworkWriter"/> to write to.</param>
+    /// <param name="multiplier">A value to multiply the keyframes by.</param>
+    /// <param name="addend">A value to add to the keyframes.</param>
     internal void WriteTransformed(NetworkWriter writer, float multiplier, float addend)
     {
         int length = this.frames.Count;

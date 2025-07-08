@@ -8,6 +8,7 @@ using HarmonyLib;
 
 using LabApi.Features.Wrappers;
 using LabApi.Loader.Features.Plugins;
+using RueI.API;
 
 [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1600:ElementsMustBeDocumented", Justification = "The plugin class does not need documentation, as it is not used by consumers")]
 internal class RueIPlugin : Plugin
@@ -29,10 +30,14 @@ internal class RueIPlugin : Plugin
     public override void Enable()
     {
         this.harmony.PatchAll();
+
+        Display.RegisterEvents();
     }
 
     public override void Disable()
     {
         this.harmony.UnpatchAll();
+
+        Display.UnregisterEvents();
     }
 }

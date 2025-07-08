@@ -3,10 +3,10 @@
 /// <summary>
 /// Represents a position where the batcher should not break.
 /// </summary>
-internal struct NoBreakInfo
+internal struct NobreakInfo
 {
     /// <summary>
-    /// The position at which to prevent breaking.
+    /// The position at which to prevent breaking, inclusive.
     /// </summary>
     public int Start;
 

@@ -10,22 +10,22 @@ using System;
 /// As an optimization, this method is a <see langword="struct"/>. Any copies will point to the same list,
 /// but may get out of sync.
 /// </remarks>
-internal struct StructList<T>
+internal struct RefList<T>
 {
     private T[] values;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="StructList{T}"/> struct with no elements.
+    /// Initializes a new instance of the <see cref="RefList{T}"/> struct with no elements.
     /// </summary>
-    public StructList()
+    public RefList()
     {
         this.values = Array.Empty<T>();
     }
 
     /// <summary>
-    /// Gets the number of items in the <see cref="StructList{T}"/>.
+    /// Gets the number of items in the <see cref="RefList{T}"/>.
     /// </summary>
-    public int Length { get; private set; }
+    public int Count { get; private set; }
 
     private readonly int Capacity => this.values.Length;
 
@@ -40,7 +40,7 @@ internal struct StructList<T>
     public readonly ref T this[int index] => ref this.values[index];
 
     /// <summary>
-    /// Ensures that the <see cref="StructList{T}"/> has a certain amount of additional capacity.
+    /// Ensures that the <see cref="RefList{T}"/> has a certain amount of additional capacity.
     /// </summary>
     /// <param name="capacity">The capacity to add.</param>
     public void AddCapacity(int capacity)
@@ -54,12 +54,12 @@ internal struct StructList<T>
     }
 
     /// <summary>
-    /// Adds an item to this <see cref="StructList{T}"/>.
+    /// Adds an item to this <see cref="RefList{T}"/>.
     /// </summary>
     /// <param name="value">The item to add.</param>
     public void Add(in T value)
     {
-        if (this.values.Length == this.Length)
+        if (this.values.Length == this.Count)
         {
             int capacity;
 
@@ -75,16 +75,16 @@ internal struct StructList<T>
             Array.Resize(ref this.values, capacity);
         }
 
-        this[this.Length++] = value;
+        this[this.Count++] = value;
     }
 
     /// <summary>
-    /// Adds a <see cref="StructList{T}"/> to the end of this <see cref="StructList{T}"/>.
+    /// Adds a <see cref="RefList{T}"/> to the end of this <see cref="RefList{T}"/>.
     /// </summary>
-    /// <param name="list">The <see cref="StructList{T}"/> to add.</param>
-    public void AddList(StructList<T> list)
+    /// <param name="list">The <see cref="RefList{T}"/> to add.</param>
+    public void AddList(RefList<T> list)
     {
-        int length = list.Length;
+        int length = list.Count;
 
         if (length == 0)
         {
@@ -93,28 +93,28 @@ internal struct StructList<T>
 
         this.GrowTo(length);
 
-        list.values.CopyTo(this.values, this.Length);
-        this.Length += length;
+        list.values.CopyTo(this.values, this.Count);
+        this.Count += length;
     }
 
     /// <summary>
-    /// Clears this <see cref="StructList{T}"/>.
+    /// Clears this <see cref="RefList{T}"/>.
     /// </summary>
     public void Clear()
     {
-        this.Length = 0;
+        this.Count = 0;
     }
 
     /// <summary>
-    /// Gets the values of the <see cref="StructList{T}"/> as a <see cref="Span{T}"/>.
+    /// Gets the values of the <see cref="RefList{T}"/> as a <see cref="Span{T}"/>.
     /// </summary>
     /// <param name="start">The position to start at.</param>
-    /// <returns>A <see cref="Span{T}"/> that encompasses all values from <paramref name="start"/> to <see cref="Length"/>.</returns>
-    public readonly Span<T> AsSpan(int start) => this.values.AsSpan(start, this.Length - start);
+    /// <returns>A <see cref="Span{T}"/> that encompasses all values from <paramref name="start"/> to <see cref="Count"/>.</returns>
+    public readonly Span<T> AsSpan(int start) => this.values.AsSpan(start, this.Count - start);
 
     private void GrowTo(int capacity)
     {
-        if (this.Capacity + this.Length < capacity)
+        if (this.Capacity + this.Count < capacity)
         {
             int newCapacity = this.Capacity * 2;
 

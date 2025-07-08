@@ -14,18 +14,18 @@ using RueI.Utils.Extensions;
 /// </summary>
 internal class ParameterHandler
 {
-    private readonly List<ContentParameter> currentParameters = new();
-    private readonly List<NoBreakInfo> noBreaks;
+    private readonly List<NobreakInfo> noBreaks;
+    private IReadOnlyList<ContentParameter> currentParameters = null!;
 
     private NetworkWriter writer = null!;
-    private int index = 0;
+    private int countPos = 0; // position at which to write the num of parameters (elementIndex)
     private int elementIndex = 0;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ParameterHandler"/> class.
     /// </summary>
     /// <param name="noBreaks">The <see cref="List{T}"/> to add nobreaks to.</param>
-    internal ParameterHandler(List<NoBreakInfo> noBreaks)
+    internal ParameterHandler(List<NobreakInfo> noBreaks)
     {
         this.noBreaks = noBreaks;
     }
@@ -37,44 +37,72 @@ internal class ParameterHandler
     internal void Setup(NetworkWriter writer)
     {
         this.writer = writer;
-        this.index = 0;
+        this.countPos = writer.Position;
 
-        // number of parameters
+        // write padding for the number of parameters
         writer.WriteInt(0);
     }
 
-    internal void SetElementParameters(ParameterList list)
+    /// <summary>
+    /// Finishes the parameter writing.
+    /// </summary>
+    internal void Finish()
     {
-        this.currentParameters.Clear();
-        this.currentParameters.EnsureCapacity(list.Count);
+        int oldPos = this.writer.Position;
 
+        this.writer.Position = this.countPos;
+        this.writer.WriteInt(this.elementIndex);
+
+        this.writer.Position = oldPos;
+    }
+
+    /// <summary>
+    /// Sets the parameters for the current element.
+    /// </summary>
+    /// <param name="list">A <see cref="IReadOnlyList{T}"/> of <see cref="ContentParameter"/>s.</param>
+    internal void SetElementParameters(IReadOnlyList<ContentParameter> list)
+    {
         foreach (ContentParameter parameter in list)
         {
-            this.currentParameters.Add(parameter);
-
             this.writer.WriteByte((byte)parameter.HintParameterType);
             parameter.Write(this.writer);
         }
 
-        this.elementIndex = this.index;
-        this.index += list.Count;
+        this.currentParameters = list;
+        this.elementIndex = this.countPos;
+        this.countPos += list.Count;
     }
 
-    internal int GetMappedElementParameterId(int paramId) => this.elementIndex + paramId;
+    /// <summary>
+    /// Maps a parameter ID relative to the current element's parameter to a total ID.
+    /// </summary>
+    /// <param name="paramId">The parameter ID to map.</param>
+    /// <returns>The mapped parameter.</returns>
+    internal int MappedElementParameterId(int paramId) => this.elementIndex + paramId;
 
+    /// <summary>
+    /// Adds a simple <see langword="string"/> parameter to the <see cref="ParameterHandler"/>.
+    /// </summary>
+    /// <param name="bytes">A <see cref="ReadOnlySpan{T}"/> of <see langword="byte"/> that contains the content of the string parameter.</param>
+    /// <returns>The ID of the added parameter.</returns>
     internal int AddStringParameter(ReadOnlySpan<byte> bytes)
     {
         this.writer.WriteByte((byte)HintParameterReaderWriter.HintParameterType.Text);
         this.writer.WriteBytes(bytes, writeSize: true);
 
-        return this.index++;
+        return this.countPos++;
     }
 
+    /// <summary>
+    /// Adds an <see cref="AnimatableFloat"/> as a parameter to the <see cref="ParameterHandler"/>.
+    /// </summary>
+    /// <param name="value">The <see cref="AnimatableFloat"/> to add.</param>
+    /// <returns>The ID of the added parameter.</returns>
     internal int AddAnimatableFloat(in AnimatableFloat value)
     {
-        this.writer.WriteByte((byte)HintParameterReaderWriter.HintParameterType.Anim)
+        this.writer.WriteByte((byte)HintParameterReaderWriter.HintParameterType.AnimationCurve);
         value.Parameter!.WriteTransformed(this.writer, value.Multiplier, value.AddendOrValue);
 
-        return this.index++;
+        return this.countPos++;
     }
 }

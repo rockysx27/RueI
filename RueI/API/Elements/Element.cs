@@ -1,15 +1,22 @@
 ﻿namespace RueI.API.Elements;
 
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+
 using RueI.API.Elements.Enums;
 using RueI.API.Elements.Parameters;
 using RueI.API.Parsing;
+
 using UnityEngine;
 
 /// <summary>
-/// Represents an <see cref="Element"/> within a display.
+/// Represents text within a <see cref="Display"/>.
 /// </summary>
 public abstract class Element
 {
+    private ReadOnlyCollection<ContentParameter>? parameters;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="Element"/> class.
     /// </summary>
@@ -58,9 +65,9 @@ public abstract class Element
     public int ZIndex { get; init; } = 1;
 
     /// <summary>
-    /// Gets the <see cref="Parameters.ParameterList"/> of the element.
+    /// Gets the parameters of the element.
     /// </summary>
-    public ParameterList ParameterList { get; init; }
+    public IReadOnlyList<ContentParameter>? Parameters { get => this.parameters; init => this.parameters = value.ToList().AsReadOnly(); }
 
     /// <summary>
     /// Gets the <see cref="ParsedData"/> for this element.

@@ -10,7 +10,7 @@ using RueI.API.Parsing.Structs;
 public readonly struct ParsedData
 {
     /// <summary>
-    /// The parsed string.
+    /// The string that was parsed.
     /// </summary>
     internal readonly string? ParsedString;
 

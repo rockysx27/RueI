@@ -50,8 +50,12 @@ public class AnimatedParameter : FormattableParameter
     /// <param name="format">The format to use.</param>
     /// <param name="roundToInt">Whether to round the value to an <see langword="int"/>.</param>
     /// <remarks>
-    /// Note that a format is not allowed if the <see cref="AnimatedParameter"/> is inside a
-    /// line-height or size tag.
+    /// <para>
+    /// Note that a format is not allowed and <paramref name="roundToInt"/> must be <see langword="false"/>
+    /// if the <see cref="AnimatedParameter"/> is inside a line-height or size tag.
+    /// </para>
+    /// Setting <paramref name="roundToInt"/> to <see langword="true"/> allows for formats that only work on
+    /// <see cref="int"/>s, such as hexadecimal, to work.
     /// </remarks>
     public AnimatedParameter(AnimatedValue value, string format, bool roundToInt)
         : this(value, format)
@@ -62,7 +66,7 @@ public class AnimatedParameter : FormattableParameter
     /// <summary>
     /// Gets a value indicating whether the float should be rounded to an <see langword="int"/>.
     /// </summary>
-    public bool RoundToInt { get; }
+    public bool RoundToInt { get; } // corresponds to "integral"
 
     /// <summary>
     /// Gets the offset for the value.
@@ -86,6 +90,12 @@ public class AnimatedParameter : FormattableParameter
         this.Value.Write(writer);
     }
 
+    /// <summary>
+    /// Writes a transformed <see cref="AnimatedParameter"/> to a <see cref="NetworkWriter"/>.
+    /// </summary>
+    /// <param name="writer">The <see cref="NetworkWriter"/> to write to.</param>
+    /// <param name="multiplier">A value to multiply the frames of the <see cref="AnimatedValue"/> by.</param>
+    /// <param name="addend">A value to add to all of the keyframes of the <see cref="AnimatedValue"/>.</param>
     internal void WriteTransformed(NetworkWriter writer, float multiplier, float addend)
     {
         writer.WriteDouble(this.Offset);

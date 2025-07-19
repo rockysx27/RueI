@@ -17,7 +17,6 @@ using RueI.API.Parsing.Structs;
 /// </summary>
 internal static class NetworkWriterSpanExtensions
 {
-    private const int MaxArraySize = 16777216; // 2 ^ 24;
     private static readonly UTF8Encoding Encoding = new(false, true);
 
     /// <summary>
@@ -102,7 +101,7 @@ internal static class NetworkWriterSpanExtensions
         nobreaks.Add(new()
         {
             Start = start,
-            End = writer.Position,
+            Length = writer.Position - start,
         });
     }
 
@@ -184,7 +183,7 @@ internal static class NetworkWriterSpanExtensions
         {
             writer.EnsureLength(sizeof(ushort));
 
-            writer.WriteUShort((ushort)bytes.Length);
+            writer.WriteUShort((ushort)(bytes.Length + 1));
         }
 
         bytes.CopyTo(writer.BufferSpan());

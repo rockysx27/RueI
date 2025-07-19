@@ -3,8 +3,10 @@
 using System;
 
 using Mirror;
-
+using RueI.API.Parsing;
+using RueI.API.Parsing.Enums;
 using RueI.API.Parsing.Structs;
+using RueI.Utils;
 using RueI.Utils.Extensions;
 
 /// <summary>
@@ -12,7 +14,7 @@ using RueI.Utils.Extensions;
 /// </summary>
 internal class AnimatedTagModification : SkipNextModification
 {
-    private readonly string tagName;
+    private readonly RichTextTag tagType;
     private AnimatableFloat value;
 
     /// <summary>
@@ -20,12 +22,12 @@ internal class AnimatedTagModification : SkipNextModification
     /// </summary>
     /// <param name="position">The position to add the <see cref="AnimatedTagModification"/> at.</param>
     /// <param name="skipCount"><inheritdoc cref="SkipNextModification(int, int)" path="/param[@name='skipCount']"/>.</param>
-    /// <param name="tagName">The name of the tag.</param>
+    /// <param name="tagType">The type of the tag.</param>
     /// <param name="value">The <see cref="AnimatableFloat"/> value for the tag.</param>
-    internal AnimatedTagModification(int position, int skipCount, string tagName, in AnimatableFloat value)
+    internal AnimatedTagModification(int position, int skipCount, RichTextTag tagType, in AnimatableFloat value)
         : base(position, skipCount)
     {
-        this.tagName = tagName;
+        this.tagType = tagType;
         this.value = value;
     }
 
@@ -36,10 +38,10 @@ internal class AnimatedTagModification : SkipNextModification
         NetworkWriter writer = context.ContentWriter;
 
         writer.WriteUtf8Char('<');
-        writer.WriteStringNoSize(this.tagName);
+        writer.WriteStringNoSize(Parser.TagNames[this.tagType]);
         writer.WriteUtf8Char('=');
 
-        int id = context.ParameterHandler.AddAnimatableFloat(this.value);
+        int id = context.ParameterHandler.AddAnimatableFloat(this.value, 1 / Constants.EmSize);
 
         writer.WriteFormatItemNoBreak(id, context.Nobreaks);
 

@@ -3,7 +3,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
@@ -21,6 +20,11 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
     where TValue : IComparable<TValue>
 {
     private readonly Dictionary<TKey, LinkedListNode<TValue>> dictionary = new();
+
+    // SortedSet is technically an option to use here, but it doesn't allow duplicates,
+    // doesn't allow for arbitrary O(1) removals by storing nodes. we could use a custom
+    // tree implementation, but that is likely overkill when we would expect maybe 10 values
+    // at max, and would not offer the same iteration speed as a LinkedList.
     private readonly LinkedList<TValue> linkedList = new();
 
     /// <summary>
@@ -156,6 +160,9 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
     {
         LinkedListNode<TValue> valueNode;
 
+        // because we add nodes AFTER all equal nodes, it is more efficient to
+        // iterate backwards (so we don't have to enumerate through the nodes
+        // that are equal)
         for (var node = this.linkedList.Last; node != null; node = node.Previous)
         {
             // greater than or equal to 0 = comes before / same sort order

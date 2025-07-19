@@ -1,13 +1,15 @@
 ﻿namespace RueI.API.Parsing.Modifications;
 
 using System;
+using RueI.API.Parsing;
+using RueI.API.Parsing.Structs;
 
 /// <summary>
 /// Represents a modification that prevents breaks.
 /// </summary>
 internal class NobreakModification : Modification
 {
-    private int length;
+    private readonly int length;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="NobreakModification"/> class.
@@ -23,10 +25,10 @@ internal class NobreakModification : Modification
     /// <inheritdoc/>
     internal override void Apply(CombinerContext context, ref ReadOnlySpan<char> buffer)
     {
-        context.Nobreaks.Add(new Structs.NobreakInfo()
+        context.Nobreaks.Add(new NobreakInfo()
         {
             Start = this.Position,
-            End = this.length,
+            Length = this.length,
         });
     }
 }

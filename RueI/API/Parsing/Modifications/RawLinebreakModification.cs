@@ -1,5 +1,7 @@
 ﻿namespace RueI.API.Parsing.Modifications;
 
+using RueI.API.Parsing;
+using RueI.Utils;
 using RueI.Utils.Extensions;
 
 /// <summary>
@@ -25,6 +27,6 @@ internal class RawLinebreakModification : LinebreakModification
     /// <inheritdoc/>
     protected override void WriteLineHeightValue(CombinerContext context)
     {
-        context.ContentWriter.WriteFloatAsString(this.lineHeight);
+        context.ContentWriter.WriteFloatAsString(this.lineHeight / Constants.EmSize);
     }
 }

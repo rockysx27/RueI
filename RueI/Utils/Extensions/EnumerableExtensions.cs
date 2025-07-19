@@ -22,12 +22,10 @@ internal static class EnumerableExtensions
         {
             value = enumerator.Current;
 
-            if (enumerator.MoveNext())
+            if (!enumerator.MoveNext())
             {
-                return false;
+                return true;
             }
-
-            return true;
         }
 
         value = default!;

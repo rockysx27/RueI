@@ -3,13 +3,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
+
 using LabApi.Features.Wrappers;
 using RoundRestarting;
+
 using RueI.API.Elements;
 using RueI.API.Parsing;
 using RueI.Utils.Collections;
-using RueI.Utils.Extensions;
 
 using UnityEngine;
 
@@ -23,12 +23,18 @@ public sealed class Display
 {
     private static readonly Dictionary<ReferenceHub, Display> Displays = new();
 
+    // dictionary is sorted by z-index in ascending order
     private readonly ValueSortedDictionary<Tag, StoredElement> elements = new();
-    private readonly MinHeap<Tag, float> expirationHeap = new();
+    private readonly MinHeap<ExpiryInfo> expirationHeap = new(); // for when elements expire - smallest expires most recently
+    private readonly MinHeap<TimeSpan> updateIntervalHeap = new(); // for dynamicelements, etc
     private readonly ReferenceHub hub;
 
     private bool updateNextFrame = false;
+
+    // forcedUpdate represents either an automatic update by a DynamicElement, etc.
+    // or an update scheduled after an external hint is shown
     private float forcedUpdate = float.PositiveInfinity;
+    private bool forcedIsExternal = false;
 
     private Display(ReferenceHub hub)
     {
@@ -70,7 +76,7 @@ public sealed class Display
     /// </summary>
     /// <param name="tag">A <see cref="Tag"/> to use. If an <see cref="Element"/> already has this tag, it will be replaced.</param>
     /// <param name="element">The <see cref="Element"/> to add.</param>
-    public void Add(Tag tag, Element element) => this.Add(
+    public void Show(Tag tag, Element element) => this.Show(
         tag ?? throw new ArgumentNullException(nameof(tag)),
         element ?? throw new ArgumentNullException(nameof(element)),
         float.NaN);
@@ -81,10 +87,10 @@ public sealed class Display
     /// <param name="tag">A <see cref="Tag"/> to use. If an <see cref="Element"/> already has this tag, it will be replaced.</param>
     /// <param name="element">The <see cref="Element"/> to add.</param>
     /// <param name="duration">A <see cref="TimeSpan"/> indicating how long to show the <see cref="Element"/> for.</param>
-    public void Add(Tag tag, Element element, TimeSpan duration) => this.Add(
+    public void Show(Tag tag, Element element, TimeSpan duration) => this.Show(
         tag ?? throw new ArgumentNullException(nameof(tag)),
         element ?? throw new ArgumentNullException(nameof(element)),
-        (float)duration.TotalSeconds + Time.time);
+        Time.time + (float)duration.TotalSeconds);
 
     /// <summary>
     /// Adds an <see cref="Element"/> to this <see cref="Display"/> for a certain period of time.
@@ -94,7 +100,7 @@ public sealed class Display
     /// <remarks>
     /// When adding an element using this method, it will not have a <see cref="Tag"/>. Therefore, there is no way to remove the element later.
     /// </remarks>
-    public void Add(Element element, TimeSpan duration) => this.Add(
+    public void Show(Element element, TimeSpan duration) => this.Show(
         new(), // new() results in a tag that is only equal to itself
         element ?? throw new ArgumentNullException(nameof(element)),
         Time.time + (float)duration.TotalSeconds);
@@ -107,15 +113,20 @@ public sealed class Display
     {
         if (this.elements.Remove(tag, out StoredElement element))
         {
-            if (element.HeapNode != null)
+            if (element.ExpiryNode != null)
             {
-                this.expirationHeap.Remove(element.HeapNode);
+                this.expirationHeap.Remove(element.ExpiryNode);
+            }
+
+            if (element.UpdateNode != null)
+            {
+                this.updateIntervalHeap.Remove(element.UpdateNode);
             }
 
             // if there's a forced update (i.e. another hint is hiding RueI,
             // there's no reason to update the display just to remove one hint
             // (since it's already not visible)
-            if (!float.IsPositiveInfinity(this.forcedUpdate))
+            if (!this.forcedIsExternal)
             {
                 this.updateNextFrame = true;
             }
@@ -161,6 +172,7 @@ public sealed class Display
     internal void SetUpdateIn(float duration)
     {
         this.forcedUpdate = Time.time + duration;
+        this.forcedIsExternal = true;
     }
 
     // not a lambda so we can later unregister
@@ -175,65 +187,77 @@ public sealed class Display
             if (display.forcedUpdate < time)
             {
                 display.updateNextFrame = true;
+
+                display.forcedIsExternal = false;
+            }
+
+            while (display.expirationHeap.TryPeek(out var node) && node.Value.ExpiresAt < time)
+            {
+                LabApi.Features.Console.Logger.Debug($"Popping next");
+
+                display.expirationHeap.Pop();
+                display.elements.Remove(node.Value.Tag);
+
+                display.updateNextFrame = true;
             }
 
             if (display.updateNextFrame)
             {
+                LabApi.Features.Console.Logger.Debug($"Update set, let's go");
+
                 display.FrameUpdate();
-
-                display.updateNextFrame = false;
-            }
-
-            while (display.expirationHeap.TryPeek(out var node) && node.Priority < time)
-            {
-                display.expirationHeap.Pop();
-                display.elements.Remove(node.Value);
-
-                display.updateNextFrame = true;
             }
         }
     }
 
-    private void Add(Tag tag, Element element, float expireAt)
+    private void Show(Tag tag, Element element, float expireAt)
     {
-        if (float.IsNaN(expireAt))
+        StoredElement storedElement = new()
         {
-            var node = this.expirationHeap.Add(tag, expireAt);
+            Element = element,
+            Tag = tag,
+        };
 
-            this.elements[tag] = new()
-            {
-                Element = element,
-                Tag = tag,
-                HeapNode = node,
-            };
-        }
-        else
+        if (!float.IsNaN(expireAt))
         {
-            this.elements[tag] = new()
+            storedElement.ExpiryNode = this.expirationHeap.Add(new ExpiryInfo()
             {
-                Element = element,
+                ExpiresAt = expireAt,
                 Tag = tag,
-            };
+            });
         }
 
+        if (element is DynamicElement dynamicElement && dynamicElement.UpdateInterval is TimeSpan span)
+        {
+            storedElement.UpdateNode = this.updateIntervalHeap.Add(span);
+        }
+
+        this.elements[tag] = storedElement;
         this.updateNextFrame = true;
     }
 
     private void FrameUpdate()
     {
-        ElementCombiner.Combine(this.hub, this.elements.Select(x => x.Value.Element)); // we don't use elements.Value, since that boxes (no way around it)
+        LabApi.Features.Console.Logger.Debug($"Updating display with {this.elements.Count} elements");
 
+        // set BEFORE so that if ElementCombiner.Combine throws an exception we don't get error spam
         this.updateNextFrame = false;
-        this.forcedUpdate = float.PositiveInfinity;
+
+        ElementCombiner.Combine(this.hub, this.elements.Select(x => x.Value.Element)); // we don't use this.elements.Values, since that boxes (no way around it)
     }
 
+    /// <summary>
+    /// Represents an element stored within a display.
+    /// </summary>
     private struct StoredElement : IComparable<StoredElement>
     {
         public Element Element;
 
         public Tag Tag;
 
-        public MinHeap<Tag, float>.Node? HeapNode;
+        public MinHeap<ExpiryInfo>.Node? ExpiryNode;
+
+        public MinHeap<TimeSpan>.Node? UpdateNode;
 
         public override readonly int GetHashCode() => this.Tag.GetHashCode();
 
@@ -241,5 +265,15 @@ public sealed class Display
 
         // sort ascending
         public readonly int CompareTo(StoredElement other) => this.Element.ZIndex.CompareTo(other.Element.ZIndex); // we use CompareTo for overflow support
+    }
+
+    private struct ExpiryInfo : IComparable<ExpiryInfo>
+    {
+        public float ExpiresAt; // relative to Time.time
+
+        public Tag Tag;
+
+        // sort ascending
+        public readonly int CompareTo(ExpiryInfo other) => this.ExpiresAt.CompareTo(other.ExpiresAt);
     }
 }

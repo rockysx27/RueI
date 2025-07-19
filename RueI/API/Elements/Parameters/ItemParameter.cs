@@ -6,6 +6,9 @@ using Mirror;
 /// <summary>
 /// Represents a parameter that is replaced by the name of an item.
 /// </summary>
+/// <remarks>
+/// This is the RueI equivalent of the base-game <see cref="Hints.ItemHintParameter"/>.
+/// </remarks>
 public class ItemParameter : ContentParameter
 {
     /// <summary>

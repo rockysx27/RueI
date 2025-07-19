@@ -1,9 +1,9 @@
-﻿namespace RueI.API.Parsing.Structs;
+﻿namespace RueI.API.Parsing;
 
-using System;
 using System.Collections.Generic;
+
 using Mirror;
-using RueI.API.Elements.Parameters;
+using RueI.API.Parsing.Structs;
 using RueI.Utils;
 using RueI.Utils.Collections;
 using RueI.Utils.Extensions;
@@ -11,20 +11,20 @@ using RueI.Utils.Extensions;
 /// <summary>
 /// Represents multiple <see cref="AnimatableFloat"/>s added together.
 /// </summary>
-internal struct CumulativeFloat
+internal class CumulativeFloat
 {
-    private RefList<AnimatableFloat> curves = new();
+    private readonly RefList<AnimatableFloat> curves = new();
     private float value;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="CumulativeFloat"/> struct.
+    /// Initializes a new instance of the <see cref="CumulativeFloat"/> class.
     /// </summary>
     public CumulativeFloat()
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="CumulativeFloat"/> struct
+    /// Initializes a new instance of the <see cref="CumulativeFloat"/> class
     /// from a given <see langword="float"/>.
     /// </summary>
     /// <param name="value">The <see langword="float"/> to initialize the <see cref="CumulativeFloat"/> with.</param>
@@ -33,18 +33,22 @@ internal struct CumulativeFloat
         this.value = value;
     }
 
-    /// <summary>
-    /// Gets an invalid <see cref="CumulativeFloat"/>.
-    /// </summary>
-    public static CumulativeFloat Invalid => new()
+    private CumulativeFloat(RefList<AnimatableFloat> original, float value)
     {
-        value = float.NaN,
-    };
+        this.curves = original.Clone();
+        this.value = value;
+    }
 
     /// <summary>
     /// Gets a value indicating whether this <see cref="CumulativeFloat"/> is invalid.
     /// </summary>
-    public readonly bool IsInvalid => float.IsNaN(this.value);
+    public bool IsInvalid => float.IsNaN(this.value);
+
+    /// <summary>
+    /// Gets the value.
+    /// </summary>
+    /// <returns>The value.</returns>
+    public float GetValue() => this.value; // TODO: remove
 
     /// <summary>
     /// Adds a <see cref="CumulativeFloat"/> to this <see cref="CumulativeFloat"/>.
@@ -155,12 +159,18 @@ internal struct CumulativeFloat
     }
 
     /// <summary>
+    /// Clones this <see cref="CumulativeFloat"/>.
+    /// </summary>
+    /// <returns>A clone of this <see cref="CumulativeFloat"/>.</returns>
+    public CumulativeFloat Clone() => new(this.curves, this.value);
+
+    /// <summary>
     /// Writes this <see cref="CumulativeFloat"/> as a series of line-height tags and linebreaks.
     /// </summary>
     /// <param name="writer">The <see cref="NetworkWriter"/> to write to.</param>
     /// <param name="paramHandler">The <see cref="ParameterHandler"/> of the <see cref="ElementCombiner"/>.</param>
     /// <param name="nobreaks">A <see cref="List{T}"/> for the position of nobreaks.</param>
-    public readonly void WriteAsLineHeight(
+    public void WriteAsLineHeight(
         NetworkWriter writer,
         ParameterHandler paramHandler,
         List<NobreakInfo> nobreaks)
@@ -198,6 +208,6 @@ internal struct CumulativeFloat
         // write as em to avoid being too big for the max size
         writer.WriteStringNoSize("<line-height=");
         writer.WriteFloatAsString(this.value / Constants.EmSize);
-        writer.WriteStringNoSize("e>\n</line-height>");
+        writer.WriteStringNoSize("e>\n<line-height=0>");
     }
 }

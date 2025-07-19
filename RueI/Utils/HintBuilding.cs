@@ -23,58 +23,6 @@ public static class HintBuilding
     private const string PERCENT = "%";
 
     /// <summary>
-    /// Represents all of the options for the alignment of a string of text.
-    /// </summary>
-    public enum AlignStyle
-    {
-        /// <summary>
-        /// Indicates that the text should be left-aligned.
-        /// </summary>
-        Left,
-
-        /// <summary>
-        /// Indicates that the text should be center-aligned.
-        /// </summary>
-        Center,
-
-        /// <summary>
-        /// Indicates that the text should be right-aligned.
-        /// </summary>
-        Right,
-
-        /// <summary>
-        /// Indicates that every line should be stretched to fill the display area, excluding the last line.
-        /// </summary>
-        Justified,
-
-        /// <summary>
-        /// Indicates that every line should be stretched to fill the display area, including the last line.
-        /// </summary>
-        Flush,
-    }
-
-    /// <summary>
-    /// Represents the case style of text.
-    /// </summary>
-    public enum CaseStyle
-    {
-        /// <summary>
-        /// Indicates that all text will be in uppercase, but lowercase characters will be slightly smaller.
-        /// </summary>
-        Smallcaps,
-
-        /// <summary>
-        /// Indicates that all text will be in lowercase.
-        /// </summary>
-        Lowercase,
-
-        /// <summary>
-        /// Indicates that all text will be in uppercase.
-        /// </summary>
-        Uppercase,
-    }
-
-    /// <summary>
     /// Converts a <see cref="UnityEngine.Color"/> to a system <see cref="Color"/>.
     /// </summary>
     /// <param name="unityColor">The <see cref="UnityEngine.Color"/> to convert.</param>
@@ -270,7 +218,27 @@ public static class HintBuilding
     /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
     public static StringBuilder SetMargins(this StringBuilder sb, float margins, MeasurementUnit unit = MeasurementUnit.Pixels)
     {
-        return sb.AddMeasurementTag("margins", margins, unit);
+        return sb.AddMeasurementTag("margin", margins, unit);
+    }
+
+    /// <summary>
+    /// Adds an margins tag to a <see cref="StringBuilder"/>.
+    /// </summary>
+    /// <param name="sb">The <see cref="StringBuilder"/> to use.</param>
+    /// <param name="margins">The size of the margins.</param>
+    /// <param name="direction">The direction to add the margins.</param>
+    /// <param name="unit">The measurement unit of the margins tag.</param>
+    /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
+    public static StringBuilder SetMargins(this StringBuilder sb, float margins, MarginDirection direction, MeasurementUnit unit = MeasurementUnit.Pixels)
+    {
+        string text = direction switch
+        {
+            MarginDirection.Left => "margin-left",
+            MarginDirection.Right => "margin-right",
+            _ => "margin",
+        };
+
+        return sb.AddMeasurementTag(text, margins, unit);
     }
 
     /// <summary>
@@ -332,9 +300,9 @@ public static class HintBuilding
     /// Adds a color tag to a <see cref="StringBuilder"/> from RGBA values.
     /// </summary>
     /// <param name="sb">The <see cref="StringBuilder"/> to use.</param>
-    /// <param name="r">The red (0-255) in the color.</param>
-    /// <param name="g">The green (0-255) in the color.</param>
-    /// <param name="b">The blue (0-255) in the color.</param>
+    /// <param name="r">The red (0-255) of the color.</param>
+    /// <param name="g">The green (0-255) pf the color.</param>
+    /// <param name="b">The blue (0-255) of the color.</param>
     /// <param name="a">The optional alpha (0-255) of the color.</param>
     /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
     public static StringBuilder SetColor(this StringBuilder sb, int r, int g, int b, int a = 255)
@@ -366,9 +334,9 @@ public static class HintBuilding
     /// Adds a mark tag to a <see cref="StringBuilder"/> from RGBA values.
     /// </summary>
     /// <param name="sb">The <see cref="StringBuilder"/> to use.</param>
-    /// <param name="r">The red (0-255) in the color.</param>
-    /// <param name="g">The green (0-255) in the color.</param>
-    /// <param name="b">The blue (0-255) in the color.</param>
+    /// <param name="r">The red (0-255) of the color.</param>
+    /// <param name="g">The green (0-255) of the color.</param>
+    /// <param name="b">The blue (0-255) of the color.</param>
     /// <param name="a">The alpha (0-255) of the color.</param>
     /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
     public static StringBuilder SetMark(this StringBuilder sb, int r, int g, int b, int a)
@@ -381,7 +349,7 @@ public static class HintBuilding
     /// Adds an alpha tag to a <see cref="StringBuilder"/>.
     /// </summary>
     /// <param name="sb">The <see cref="StringBuilder"/> to use.</param>
-    /// <param name="alpha">The alpha (0-255) of the color.</param>
+    /// <param name="alpha">The alpha (0-255).</param>
     /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
     public static StringBuilder SetAlpha(this StringBuilder sb, int alpha) => sb.Append($"<alpha={alpha:X2}>");
 

@@ -1,6 +1,7 @@
 ﻿namespace RueI.API.Parsing.Modifications;
 
 using System;
+using RueI.API.Parsing;
 
 /// <summary>
 /// Represents a <see cref="Modification"/> that skips a certain number of characters
@@ -8,8 +9,6 @@ using System;
 /// </summary>
 internal class SkipNextModification : Modification
 {
-    private readonly int count;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="SkipNextModification"/> class.
     /// </summary>
@@ -18,12 +17,17 @@ internal class SkipNextModification : Modification
     internal SkipNextModification(int position, int skipCount)
         : base(position)
     {
-        this.count = skipCount;
+        this.SkipCount = skipCount;
     }
+
+    /// <summary>
+    /// Gets the number of characters that should be skipped.
+    /// </summary>
+    internal int SkipCount { get; }
 
     /// <inheritdoc/>
     internal override void Apply(CombinerContext context, ref ReadOnlySpan<char> buffer)
     {
-        buffer = buffer[this.count..];
+        buffer = buffer[this.SkipCount..];
     }
 }

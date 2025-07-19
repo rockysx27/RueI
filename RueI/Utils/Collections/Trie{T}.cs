@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using System.Runtime.CompilerServices;
 using RueI.Utils.Extensions;
 
 /// <summary>
@@ -12,15 +12,6 @@ using RueI.Utils.Extensions;
 /// <typeparam name="T">The value associated with the end.</typeparam>
 internal sealed class Trie<T>
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="Trie{T}"/> class.
-    /// </summary>
-    /// <param name="values">A collection to use to create the <see cref="Trie{T}"/>.</param>
-    public Trie(params (string Name, T Value)[] values)
-        : this((IEnumerable<(string Name, T Value)>)values)
-    {
-    }
-
     /// <summary>
     /// Initializes a new instance of the <see cref="Trie{T}"/> class.
     /// </summary>
@@ -40,7 +31,10 @@ internal sealed class Trie<T>
         // TODO: check this code
         if (values.TryGetSingle(out var value))
         {
-            return new RadixNode(value.Value, null);
+            if (value.Slice.Length == 0)
+            {
+                return new RadixNode(value.Value, null);
+            }
         }
 
         var groups = values
@@ -49,7 +43,7 @@ internal sealed class Trie<T>
                 g => g.Key,
                 g => Build(g.Select(kv => (kv.Slice.AllExceptFirst(), kv.Value)))); // recursively build node
 
-        return new RadixNode(default, groups.ToDictionary(x => x.Key, x => x.Value));
+        return new RadixNode(default, groups);
     }
 
     /// <summary>
@@ -77,11 +71,16 @@ internal sealed class Trie<T>
         public bool IsEmpty => this.start == this.str.Length;
 
         /// <summary>
+        /// Gets the length of the <see cref="StringSlice"/>.
+        /// </summary>
+        public int Length => this.str.Length - this.start;
+
+        /// <summary>
         /// Gets the <see cref="char"/> at the given index.
         /// </summary>
         /// <param name="index">The index of the value.</param>
         /// <returns>The <see cref="char"/> at the index.</returns>
-        public readonly char this[int index] => this.str[index + index];
+        public readonly char this[int index] => this.str[this.start + index];
 
         /// <summary>
         /// Converts a <see cref="StringSlice"/> to a <see cref="ReadOnlySpan{T}"/>.
@@ -128,7 +127,7 @@ internal sealed class Trie<T>
         /// <param name="ch">The <see langword="char"/> with the prefix.</param>
         /// <returns>The <see cref="RadixNode"/> that represents values that start with <paramref name="ch"/>, or <see langword="null"/> if
         /// no sub-nodes start with <paramref name="ch"/>.</returns>
-        public RadixNode? this[char ch]
+        internal RadixNode? this[char ch]
         {
             get
             {
@@ -141,6 +140,23 @@ internal sealed class Trie<T>
                     return null;
                 }
             }
+        }
+
+        /// <summary>
+        /// Tries to get a <see cref="RadixNode"/> from the <see cref="Nodes"/> of this <see cref="RadixNode"/>.
+        /// </summary>
+        /// <param name="ch">The <see langword="char"/> to use as a prefix.</param>
+        /// <param name="node">If this method returns <see langword="true"/>, the <see cref="RadixNode"/>.</param>
+        /// <returns><see langword="true"/> if there was a <see cref="RadixNode"/> with that prefix; otherwise, false.</returns>
+        internal bool TryGetNode(char ch, out RadixNode node)
+        {
+            if (this.Nodes != null && this.Nodes.TryGetValue(ch, out node))
+            {
+                return true;
+            }
+
+            node = null!;
+            return false;
         }
     }
 }

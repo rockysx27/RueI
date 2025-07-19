@@ -2,9 +2,10 @@
 
 using System;
 using System.Collections.Generic;
+
 using global::Utils.Networking;
 using Mirror;
-using NorthwoodLib.Pools;
+
 using RueI.API.Elements.Parameters;
 using RueI.API.Parsing.Structs;
 using RueI.Utils.Extensions;
@@ -12,13 +13,14 @@ using RueI.Utils.Extensions;
 /// <summary>
 /// Handles the parameters for <see cref="ElementCombiner"/>.
 /// </summary>
-internal class ParameterHandler
+internal sealed class ParameterHandler
 {
     private readonly List<NobreakInfo> noBreaks;
     private IReadOnlyList<ContentParameter> currentParameters = null!;
 
     private NetworkWriter writer = null!;
-    private int countPos = 0; // position at which to write the num of parameters (elementIndex)
+    private int countPosition = 0; // position at which to write the num of parameters
+    private int numParams = 0;
     private int elementIndex = 0;
 
     /// <summary>
@@ -37,7 +39,8 @@ internal class ParameterHandler
     internal void Setup(NetworkWriter writer)
     {
         this.writer = writer;
-        this.countPos = writer.Position;
+        this.countPosition = writer.Position;
+        this.numParams = 0;
 
         // write padding for the number of parameters
         writer.WriteInt(0);
@@ -48,10 +51,19 @@ internal class ParameterHandler
     /// </summary>
     internal void Finish()
     {
+        if (this.numParams == 0)
+        {
+            // add a string parameter if there's none to prevent
+            // errors on the client
+            this.AddStringParameter(ReadOnlySpan<byte>.Empty);
+        }
+
         int oldPos = this.writer.Position;
 
-        this.writer.Position = this.countPos;
-        this.writer.WriteInt(this.elementIndex);
+        LabApi.Features.Console.Logger.Debug($"Finished parameters with {this.numParams} params");
+
+        this.writer.Position = this.countPosition;
+        this.writer.WriteInt(this.numParams);
 
         this.writer.Position = oldPos;
     }
@@ -69,8 +81,8 @@ internal class ParameterHandler
         }
 
         this.currentParameters = list;
-        this.elementIndex = this.countPos;
-        this.countPos += list.Count;
+        this.elementIndex = this.numParams;
+        this.numParams += list.Count;
     }
 
     /// <summary>
@@ -90,19 +102,20 @@ internal class ParameterHandler
         this.writer.WriteByte((byte)HintParameterReaderWriter.HintParameterType.Text);
         this.writer.WriteBytes(bytes, writeSize: true);
 
-        return this.countPos++;
+        return this.numParams++;
     }
 
     /// <summary>
     /// Adds an <see cref="AnimatableFloat"/> as a parameter to the <see cref="ParameterHandler"/>.
     /// </summary>
     /// <param name="value">The <see cref="AnimatableFloat"/> to add.</param>
+    /// <param name="multi">A value to multiply the <see cref="AnimatableFloat"/> by.</param>
     /// <returns>The ID of the added parameter.</returns>
-    internal int AddAnimatableFloat(in AnimatableFloat value)
+    internal int AddAnimatableFloat(in AnimatableFloat value, float multi = 1)
     {
         this.writer.WriteByte((byte)HintParameterReaderWriter.HintParameterType.AnimationCurve);
-        value.Parameter!.WriteTransformed(this.writer, value.Multiplier, value.AddendOrValue);
+        value.Parameter!.WriteTransformed(this.writer, value.Multiplier * multi, value.AddendOrValue);
 
-        return this.countPos++;
+        return this.numParams++;
     }
 }

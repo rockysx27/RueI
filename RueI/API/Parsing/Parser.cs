@@ -6,9 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
-
+using LabApi.Features.Console;
 using RueI.API.Elements;
 using RueI.API.Elements.Parameters;
 using RueI.API.Parsing.Enums;
@@ -26,26 +25,22 @@ internal static class Parser
 {
     // TODO: support tangents and shit by manipulating size
     private const int AdjustedTagLength = Constants.MaxTagLength - 2; // so we don't count < and =
+    private const AlignStyle NoAlignStyle = (AlignStyle)(-1);
 
     private static readonly mscorlib.System.Collections.Generic.Stack<AnimatableFloat> SizeStack = new();
-    private static readonly CumulativeFloat Offset = new();
 
+    private static readonly CumulativeFloat Offset = null!;
     private static readonly char[] CharBuffer = new char[Constants.MaxTagLength];
     private static readonly IReadOnlyList<ContentParameter> CurrentParameters = null!; // safe, since we only access inside Parse (which sets this)
     private static readonly List<Modification> Modifications = new();
 
-    private static readonly Trie<RichTextTag> TagTrie = new(new[]
+    private static readonly Trie<AlignStyle> AlignTrie = new(new[]
     {
-        ("noparse", RichTextTag.Noparse),
-        ("line-height", RichTextTag.LineHeight),
-        ("voffset", RichTextTag.VOffset),
-        ("size", RichTextTag.Size),
-        ("/noparse", RichTextTag.Noparse),
-        ("/size", RichTextTag.Size),
-        ("/voffset", RichTextTag.VOffset),
-        ("/line-height", RichTextTag.CloseLineHeight),
+        ("left", AlignStyle.Left),
+        ("right", AlignStyle.Right),
     });
 
+    private static readonly Trie<RichTextTag> TagTrie;
     private static readonly Trie<char> ReplacementTrie = new(new[]
     {
         ("br", '\n'),
@@ -62,11 +57,40 @@ internal static class Parser
     private static bool noparseParsesEscapeSeq;
     private static bool noparseParsesFormat;
 
-    private static int position = 0;
+    private static bool resolutionAlign;
+
+    // saving the last position makes backtracking easier
+    private static int lastPosition = 0;
+    private static int position = -1; // TryGetNext increases this by 1
 
     private static AnimatableFloat lineHeight = AnimatableFloat.Invalid;
+    private static AlignStyle alignment = NoAlignStyle;
 
-    // TODO: make docs better
+    static Parser()
+    {
+        TagTrie = new(TagNames.Select(x => (x.Value, x.Key)));
+    }
+
+    /// <summary>
+    /// Gets a <see cref="Dictionary{TKey, TValue}"/> containing the name of each <see cref="RichTextTag"/>.
+    /// </summary>
+    internal static Dictionary<RichTextTag, string> TagNames { get; } = new()
+    {
+        { RichTextTag.Noparse, "noparse" },
+        { RichTextTag.LineHeight, "line-height" },
+        { RichTextTag.VOffset, "voffset" },
+        { RichTextTag.Size, "size" },
+        { RichTextTag.Align, "align" },
+        { RichTextTag.Pos, "pos" },
+        { RichTextTag.CloseNoparse, "/noparse" },
+        { RichTextTag.CloseSize, "/size" },
+        { RichTextTag.CloseVOffset, "/voffset" },
+        { RichTextTag.CloseLineHeight, "/line-height" },
+        { RichTextTag.CloseAlign, "/align" },
+        { RichTextTag.CloseAlign, "/pos" },
+    };
+
+    // TODO: rewrite all of this
 
     /// <summary>
     /// Parses an <see cref="Element"/> with the given text.
@@ -77,20 +101,25 @@ internal static class Parser
     [SkipLocalsInit]
     public static ParsedData Parse(string text, Element element)
     {
+        Reset();
+
         Parser.text = text;
 
         noparseParsesEscapeSeq = element.NoparseSettings.HasFlagFast(Elements.Enums.NoparseSettings.ParsesEscapeSequences);
         noparseParsesFormat = element.NoparseSettings.HasFlagFast(Elements.Enums.NoparseSettings.ParsesFormatItems);
+        resolutionAlign = element.ResolutionBasedAlign;
 
         while (TryGetNext(out char ch))
         {
             HandleChar(ch);
         }
 
-        // reset afterwards to avoid an unnecessary reset when first calling Parse
-        Reset();
+        if (alignment == AlignStyle.Right)
+        {
+            Modifications.Add(new AlignSpaceModification(false, position));
+        }
 
-        return new ParsedData(text, Offset, Modifications);
+        return new ParsedData(text, Offset.Clone(), Modifications.ToList());
     }
 
     private static void Reset()
@@ -98,11 +127,13 @@ internal static class Parser
         SizeStack.Clear();
         Offset.Clear();
 
-        position = 0;
+        position = -1;
 
         lineHeight = AnimatableFloat.Invalid;
 
         Modifications.Clear();
+
+        alignment = NoAlignStyle;
     }
 
     private static void HandleChar(char ch)
@@ -115,7 +146,11 @@ internal static class Parser
         switch (ch)
         {
             case '<':
-                TryParseTag();
+                if (!TryParseTag())
+                {
+                    position = lastPosition;
+                }
+
                 break;
             case '\n':
                 AddLinebreak();
@@ -126,21 +161,20 @@ internal static class Parser
     private static bool TryParseTag()
     {
         // keep track of count to ensure that our total size is less than Constants.MaxTagSize
-        int startPos = position;
-
-        int Count() => position - startPos + 1; // + 1 to include >
-
-        //// int start = ++position;
+        int count = 0;
+        int start = position;
 
         Trie<RichTextTag>.RadixNode? node = TagTrie.Root;
 
         while (TryGetNext(out char ch))
         {
+            lastPosition = position; // no need for backtracking
+            count++;
             RichTextTag tag = node.Value;
 
             if (tag != default)
             {
-                // quick check to see if tag takes in a parameter
+                // quick check to see if tag doesn't take in a parameter
                 if (tag >= RichTextTag.Noparse)
                 {
                     if (noparse && tag != RichTextTag.CloseNoparse)
@@ -159,11 +193,11 @@ internal static class Parser
 
                             while (TryGetNext(out ch))
                             {
-                                if (Count() > Constants.MaxTagLength)
+                                if (count > Constants.MaxTagLength)
                                 {
                                     BreakTag();
 
-                                    break;
+                                    return false;
                                 }
                                 else if (ch == '>')
                                 {
@@ -173,7 +207,7 @@ internal static class Parser
                                 {
                                     BreakTag();
 
-                                    break;
+                                    return false;
                                 }
                             }
 
@@ -193,14 +227,17 @@ internal static class Parser
                                 case RichTextTag.CloseLineHeight:
                                     lineHeight = AnimatableFloat.Invalid;
                                     break;
-                                case RichTextTag.Default:
+                                case RichTextTag.Noparse:
                                     noparse = true;
                                     break;
                                 case RichTextTag.CloseNoparse:
                                     noparse = false;
                                     break;
+                                case RichTextTag.CloseAlign:
+                                    alignment = NoAlignStyle;
+                                    break;
                                 default:
-                                    return true;
+                                    break;
                             }
 
                             return true;
@@ -211,16 +248,34 @@ internal static class Parser
                     if (ch != '=')
                     {
                         // we've landed on a valid tag that takes a parameter,
-                        // but the next char isn't =
-                        // handle it since it could be something like a linebreak
-                        HandleChar(ch);
-
-                        return false;
+                        // but the next char isn't = (e.g. <line-height> or <line-height!
+                        // don't call HandleChar for the same reason we don't call HandleChar for <<<<<<
+                        break;
                     }
 
-                    int oldPos = position;
+                    if (tag == RichTextTag.Align)
+                    {
+                        lastPosition = position;
 
-                    if (TryParseMeasurements(Count(), out MeasurementInfo info))
+                        if (TryParseAlign(out AlignStyle align) && TryGetNext(out char terminator) && terminator == '>')
+                        {
+                            if (alignment != AlignStyle.Left && align == AlignStyle.Left) // right needs immediate padding
+                            {
+                                int newPosition = position + 1;
+
+                                Modifications.Add(new AlignSpaceModification(true, newPosition));
+                            }
+
+                            alignment = align;
+                        }
+
+                        position = lastPosition;
+
+                        return true;
+                    }
+
+                    // we never need to backtrack
+                    if (TryParseMeasurements(count, out MeasurementInfo info))
                     {
                         AnimatableFloat value = default;
 
@@ -238,45 +293,55 @@ internal static class Parser
                                 break;
                             case RichTextTag.VOffset:
                                 // TODO: support voffset
+                                BreakTag();
                                 return false;
                         }
 
-                        string tagName = text[(startPos + 1)..oldPos];
-                        int count = Count();
+                        int totalCount = position - start + 1;
 
                         if (value.IsAnimated)
                         {
-                            Modifications.Add(new AnimatedTagModification(startPos, count, tagName, in value)); // TODO: check for off by one errors
+                            Modifications.Add(new AnimatedTagModification(start, totalCount, tag, in value)); // TODO: check for off by one errors
                         }
                         else
                         {
-                            Modifications.Add(new TagModification(startPos, count, tagName, value.AddendOrValue)); // TODO: check for off by one errors
+                            Modifications.Add(new TagModification(start, totalCount, tag, value.AddendOrValue)); // TODO: check for off by one errors
                         }
 
                         return true;
                     }
 
-                    position = oldPos;
-
-                    return false;
+                    BreakTag();
+                    break;
                 }
             }
 
-            if ((node = node[TagHelpers.ToLowercaseFast(ch)]) == null)
+            if (!node.TryGetNode(TagHelpers.ToLowercaseFast(ch), out node))
             {
-                HandleChar(ch);
-
-                return true;
+                break;
             }
 
             position++;
         }
 
+        // position - 1 since TryGetNext increases position by 1
+        lastPosition = position - 1;
+
         return false;
     }
 
+    /// <summary>
+    /// Tries to parse a format item.
+    /// </summary>
+    /// <remarks>
+    /// If <see langword="false"/>, there is no format item. If <see langword="true"/>, <paramref name="num"/> is either
+    /// the ID of the format item or <c>-1</c>, indicating that two characters were processed.
+    /// </remarks>
     private static bool TryParseFormatItem(out int num)
     {
+        // TODO: make sure this works with lastPosition
+        // because format items are not handled by TMP, we get the raw character
+        // rather than using TryGetNext, which uses escape sequences
         char cur = text[position];
 
         if (noparse && !noparseParsesFormat)
@@ -330,11 +395,15 @@ internal static class Parser
                 {
                     int length = position - start;
 
+                    // {123}
+                    // ^^^^^
+                    // 01234
+                    // we start at 1, end at 4, length = 3
                     if (int.TryParse(text.AsSpan(start, length), out int result) && result >= 0)
                     {
                         if (result >= CurrentParameters.Count)
                         {
-                            Modifications.Add(new InvalidFormatItemModification(position, length + 1)); // TODO: check for potential off by one errors
+                            Modifications.Add(new InvalidFormatItemModification(start - 1, length + 2)); // TODO: check for potential off by one errors
 
                             // doesn't really matter what we do here
                             Unsafe.SkipInit(out num);
@@ -344,9 +413,7 @@ internal static class Parser
                         // since we load the parameters in reverse order, we get the opposite index here
                         int index = CurrentParameters.Count - result;
 
-                        // TODO: add skip for to tag
-                        // TODO: opposite index
-                        Modifications.Add(new FormatItemModification(position, length + 1, index)); // TODO: check for potential off by one errors
+                        Modifications.Add(new FormatItemModification(start - 1, length + 2, index)); // TODO: check for potential off by one errors
                         num = index;
 
                         return true;
@@ -361,7 +428,7 @@ internal static class Parser
         }
         else if (cur == '}' && MoveNext() && text[position] == '}')
         {
-            Modifications.Add(new NobreakModification(position, 2));
+            Modifications.Add(new NobreakModification(position - 1, 2));
             num = -1;
 
             return true;
@@ -417,7 +484,7 @@ internal static class Parser
             // TODO: fix
             info = default;
 
-            return true;
+            return false;
         }
 
         do
@@ -429,7 +496,7 @@ internal static class Parser
                     break;
                 case '<':
                     goto EndLoop;
-                case ',':
+                case ',': // for some reason the comma has really weird behavior
                     comma = true;
                     break;
                 case '>':
@@ -538,23 +605,23 @@ internal static class Parser
             return false;
         }
 
+        lastPosition = position;
+
         char cur = text[position];
 
         // we handle <br> tags and other similar tags here since they have special behavior (they act more like escape sequences)
         if (cur == '<' && !noparse)
         {
             Trie<char>.RadixNode? node = ReplacementTrie.Root;
-            int replaceTagPos = position;
 
-            while (replaceTagPos < text.Length)
+            while (++position < text.Length)
             {
-                char replacementCh = text[replaceTagPos];
+                char replacementCh = text[position];
 
                 if (replacementCh is '=' or ' ' or '>')
                 {
                     if (node.Value != default)
                     {
-                        position = replaceTagPos;
                         ch = node.Value;
 
                         return true;
@@ -563,13 +630,13 @@ internal static class Parser
                     break;
                 }
 
-                if ((node = node[replacementCh]) == null)
+                if (!node.TryGetNode(text[position], out node))
                 {
                     break;
                 }
-
-                replaceTagPos++;
             }
+
+            position = lastPosition;
 
             ch = '<';
             return true;
@@ -585,8 +652,6 @@ internal static class Parser
         if (noparse && !noparseParsesEscapeSeq)
         {
             // additional backslash to ensure the escape sequence isn't handled
-            // even if we have something <noparse>\\n</noparse>, we add two backslashes so the \n is
-            // never parsed
             Modifications.Add(new CharModification(position, '\\', false)); // TODO: check for potential off by one errors
 
             ch = '\\';
@@ -594,43 +659,42 @@ internal static class Parser
             return true;
         }
 
-        int newPos = position + 1;
+        position++;
 
-        if (newPos < text.Length)
+        if (position < text.Length)
         {
-            switch (text[newPos])
+            switch (text[position])
             {
                 case '\\': // escaped \, so just advance to next \
-                    position = newPos;
                     ch = '\\';
                     return true;
                 case 'v': // vertical tab
                 case 'n': // \n
-                    position = newPos;
                     ch = '\n';
                     return true;
                 case 't':
-                    position = newPos;
                     ch = '\t';
                     return true;
                 case 'r':
-                    position = newPos;
                     ch = '\r';
                     return true;
                 case 'U': // TODO: handle \U
                     Modifications.Add(new CharModification(position, '\\', false)); // TODO: check for potential off by one errors
-                    ch = '\\';
-                    return true;
+                    break;
                 case 'u':
+                    // TODO: rewrite to be less dumb
                     // newPos is currently at |u, move to u|
                     const int UnicodeLiteralSize = 4;
 
-                    if (++newPos + (UnicodeLiteralSize - 1) < text.Length)
+                    // TODO: check
+                    int start = position;
+                    position += 4;
+
+                    if (position < text.Length)
                     {
-                        if (int.TryParse(text.AsSpan(newPos, UnicodeLiteralSize), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value))
+                        if (int.TryParse(text.AsSpan(start, UnicodeLiteralSize), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value))
                         {
                             // TODO: check
-                            position = newPos + UnicodeLiteralSize - 1;
                             ch = (char)value;
 
                             return true;
@@ -641,38 +705,92 @@ internal static class Parser
             }
         }
 
+        // backtrack to lastPosition
+        position = lastPosition;
+
         ch = '\\';
 
         return true;
     }
 
+    private static bool TryParseAlign(out AlignStyle align)
+    {
+        Trie<AlignStyle>.RadixNode node = AlignTrie.Root;
+
+        while (TryGetNext(out char ch) && node.TryGetNode(ch, out node))
+        {
+            if (node.Value is AlignStyle alignStyle)
+            {
+                align = alignStyle;
+
+                return true;
+            }
+        }
+
+        align = default;
+        return false;
+    }
+
     private static void BreakTag()
     {
+        int pos = lastPosition + 1;
+
         if (noparse)
         {
-            Modifications.Add(new NoparseModification(position - 1));
+            Modifications.Add(new NoparseModification(pos));
         }
         else
         {
-            Modifications.Add(new CloseNoparseModification(position - 1));
+            Modifications.Add(new CloseNoparseModification(pos));
         }
     }
 
     private static void AddLinebreak()
     {
+        static void AddAnimatable(int length, in AnimatableFloat animatableFloat)
+        {
+            if (animatableFloat.IsAnimated)
+            {
+                Modifications.Add(new AnimatedLinebreakModification(animatableFloat, lastPosition, length));
+            }
+            else
+            {
+                Modifications.Add(new RawLinebreakModification(animatableFloat.AddendOrValue, lastPosition, length));
+            }
+
+            Offset.Add(animatableFloat);
+        }
+
+        int length = position - lastPosition + 1;
+
+        // add alignment before
+        if (alignment == AlignStyle.Right)
+        {
+            Modifications.Add(new AlignSpaceModification(false, lastPosition));
+        }
+
         if (!lineHeight.IsInvalid)
         {
-            Offset.Add(in lineHeight);
+            AddAnimatable(length, in lineHeight);
+
+            return;
         }
         else if (SizeStack.TryPeek(out AnimatableFloat value))
         {
-            const float SizeToLineHieght = Constants.DefaultLineHeight / Constants.EmSize;
+            // TODO: change this so this is done at SizeStack
+            AddAnimatable(length, in value);
 
-            Offset.Add(value with { Multiplier = value.Multiplier * SizeToLineHieght });
+            return;
         }
         else
         {
+            Modifications.Add(new RawLinebreakModification(Constants.DefaultLineHeight, lastPosition, length));
             Offset.Add(Constants.DefaultLineHeight);
+        }
+
+        if (alignment == AlignStyle.Left)
+        {
+            Modifications.Add(new AlignSpaceModification(false, lastPosition));
         }
     }
 
@@ -697,6 +815,7 @@ internal static class Parser
         public readonly AnimatableFloat ToAnimatableFloat(float pointSize, float add = 0)
         {
             float multi = this.AddType == AdditionType.SubtractiveOrNegative ? -1f : 1f;
+            multi *= Constants.DefaultLineHeight / pointSize;
 
             if (add == 0 && this.Unit != MeasurementUnit.Pixels)
             {

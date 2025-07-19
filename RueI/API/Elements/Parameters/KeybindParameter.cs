@@ -13,7 +13,7 @@ public class KeybindParameter : FormattableParameter
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="KeybindParameter"/> class
-    /// from a SS setting ID.
+    /// from an SS setting ID.
     /// </summary>
     /// <param name="id">The ID of the server-setting parameter.</param>
     /// <param name="format">The format to use.</param>

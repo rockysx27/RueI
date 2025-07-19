@@ -1,6 +1,7 @@
 ﻿namespace RueI.API.Parsing.Modifications;
 
 using System;
+using RueI.API.Parsing;
 using RueI.Utils.Extensions;
 
 /// <summary>
@@ -34,7 +35,7 @@ internal class CharModification : Modification
             context.Nobreaks.Add(new()
             {
                 Start = context.ContentWriter.Position - 1,
-                End = context.ContentWriter.Position + 1,
+                Length = 1,
             });
         }
     }

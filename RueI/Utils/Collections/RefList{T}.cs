@@ -3,23 +3,32 @@
 using System;
 
 /// <summary>
-/// Represents a <see langword="struct"/> list that offers <see langword="ref"/> access to elements.
+/// Represents a list that offers <see langword="ref"/> access to elements.
 /// </summary>
 /// <typeparam name="T">The type of elements to store.</typeparam>
-/// <remarks>
-/// As an optimization, this method is a <see langword="struct"/>. Any copies will point to the same list,
-/// but may get out of sync.
-/// </remarks>
-internal struct RefList<T>
+internal sealed class RefList<T>
 {
     private T[] values;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RefList{T}"/> struct with no elements.
+    /// Initializes a new instance of the <see cref="RefList{T}"/> class with no elements.
     /// </summary>
     public RefList()
     {
         this.values = Array.Empty<T>();
+    }
+
+    private RefList(RefList<T> original)
+    {
+        if (original.Capacity == 0)
+        {
+            this.values = Array.Empty<T>();
+        }
+        else
+        {
+            this.values = (T[])original.values.Clone();
+            this.Count = original.Count;
+        }
     }
 
     /// <summary>
@@ -27,7 +36,7 @@ internal struct RefList<T>
     /// </summary>
     public int Count { get; private set; }
 
-    private readonly int Capacity => this.values.Length;
+    private int Capacity => this.values.Length;
 
     /// <summary>
     /// Gets the item at the given index.
@@ -37,7 +46,7 @@ internal struct RefList<T>
     /// <remarks>
     /// The value is unspecified if <paramref name="index"/> is out of bounds.
     /// </remarks>
-    public readonly ref T this[int index] => ref this.values[index];
+    public ref T this[int index] => ref this.values[index];
 
     /// <summary>
     /// Ensures that the <see cref="RefList{T}"/> has a certain amount of additional capacity.
@@ -106,11 +115,17 @@ internal struct RefList<T>
     }
 
     /// <summary>
+    /// Creates a clone of the <see cref="RefList{T}"/>.
+    /// </summary>
+    /// <returns>A shallow-copy of the <see cref="RefList{T}"/>.</returns>
+    public RefList<T> Clone() => new(this);
+
+    /// <summary>
     /// Gets the values of the <see cref="RefList{T}"/> as a <see cref="Span{T}"/>.
     /// </summary>
     /// <param name="start">The position to start at.</param>
     /// <returns>A <see cref="Span{T}"/> that encompasses all values from <paramref name="start"/> to <see cref="Count"/>.</returns>
-    public readonly Span<T> AsSpan(int start) => this.values.AsSpan(start, this.Count - start);
+    public Span<T> AsSpan(int start) => this.values.AsSpan(start, this.Count - start);
 
     private void GrowTo(int capacity)
     {

@@ -14,6 +14,10 @@ internal enum RichTextTag
 
     Size,
 
+    Align,
+
+    Pos,
+
     Noparse, // <noparse>
 
     CloseNoparse,
@@ -23,5 +27,9 @@ internal enum RichTextTag
     CloseLineHeight,
 
     CloseSize,
+
+    CloseAlign,
+
+    ClosePos,
 #pragma warning restore SA1602 // Enumeration items should be documented
 }

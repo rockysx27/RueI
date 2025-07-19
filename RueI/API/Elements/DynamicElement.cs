@@ -38,6 +38,13 @@ public class DynamicElement : Element
     }
 
     /// <summary>
+    /// Gets or initializes an interval for how often a <see cref="Display"/> with this <see cref="DynamicElement"/>
+    /// should be automatically updated, or <see langword="null"/> if the <see cref="DynamicElement"/> should not
+    /// automatically update a <see cref="Display"/>.
+    /// </summary>
+    public TimeSpan? UpdateInterval { get; init; }
+
+    /// <summary>
     /// Gets the <see cref="Func{T, TResult}"/> used to obtain data for this <see cref="DynamicElement"/>.
     /// </summary>
     protected Func<ReferenceHub, string> ContentGetter { get; }

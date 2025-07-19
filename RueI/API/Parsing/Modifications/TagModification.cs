@@ -2,6 +2,9 @@
 
 using System;
 using Mirror;
+using RueI.API.Parsing;
+using RueI.API.Parsing.Enums;
+using RueI.Utils;
 using RueI.Utils.Extensions;
 
 /// <summary>
@@ -9,7 +12,7 @@ using RueI.Utils.Extensions;
 /// </summary>
 internal class TagModification : SkipNextModification
 {
-    private readonly string tagName;
+    private readonly RichTextTag tagType;
     private readonly float value;
 
     /// <summary>
@@ -17,12 +20,12 @@ internal class TagModification : SkipNextModification
     /// </summary>
     /// <param name="position">The position to add the <see cref="TagModification"/> at.</param>
     /// <param name="skipCount"><inheritdoc cref="SkipNextModification(int, int)" path="/param[@name='skipCount']"/></param>
-    /// <param name="tagName">The name of the tag.</param>
+    /// <param name="tagType">The type of the tag.</param>
     /// <param name="value">The value of the tag.</param>
-    internal TagModification(int position, int skipCount, string tagName, float value)
+    internal TagModification(int position, int skipCount, RichTextTag tagType, float value)
         : base(position, skipCount)
     {
-        this.tagName = tagName;
+        this.tagType = tagType;
         this.value = value;
     }
 
@@ -32,9 +35,9 @@ internal class TagModification : SkipNextModification
         NetworkWriter writer = context.ContentWriter;
 
         writer.WriteUtf8Char('<');
-        writer.WriteStringNoSize(this.tagName);
+        writer.WriteStringNoSize(Parser.TagNames[this.tagType]);
         writer.WriteUtf8Char('=');
-        writer.WriteFloatAsString(this.value);
+        writer.WriteFloatAsString(this.value / Constants.EmSize);
 
         writer.WriteUtf8Char('e');
         writer.WriteUtf8Char('>');

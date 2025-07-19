@@ -11,7 +11,7 @@ using UnityEngine;
 /// </summary>
 internal class CachedElement : DynamicElement
 {
-    private float timeLeft = -1;
+    private float expireCacheAt = float.NegativeInfinity;
     private ParsedData cachedParsedData;
 
     /// <summary>
@@ -34,11 +34,9 @@ internal class CachedElement : DynamicElement
     /// <inheritdoc/>
     protected internal override ParsedData GetParsedData(ReferenceHub hub)
     {
-        this.timeLeft -= Time.deltaTime;
-
-        if (this.timeLeft < 0)
+        if (this.expireCacheAt < Time.time)
         {
-            this.timeLeft = (float)this.CacheTime.TotalSeconds;
+            this.expireCacheAt = (float)this.CacheTime.TotalSeconds + Time.time;
 
             return this.cachedParsedData = Parser.Parse(this.ContentGetter(hub), this);
         }

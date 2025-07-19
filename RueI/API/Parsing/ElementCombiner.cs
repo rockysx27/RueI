@@ -2,10 +2,10 @@
 
 using System;
 using System.Collections.Generic;
-
+using System.Text;
 using global::Utils.Networking;
 using Hints;
-
+using LabApi.Features.Console;
 using Mirror;
 
 using RueI.API.Elements;
@@ -16,26 +16,20 @@ using RueI.Utils;
 using RueI.Utils.Extensions;
 
 /// <summary>
-/// Combines multiple <see cref="Elements.Element"/>s into a single <see cref="TextHint"/>
+/// Combines multiple <see cref="Element"/>s into a single <see cref="TextHint"/>
 /// and sends it to a <see cref="ReferenceHub"/>.
 /// </summary>
 internal static class ElementCombiner
 {
-    /// <summary>
-    /// Gets the ID of an animated parameter.
-    /// </summary>
-    internal const byte AnimatedParameterID = (byte)HintParameterReaderWriter.HintParameterType.AnimationCurve;
-
     private const ushort MaxStringLength = ushort.MaxValue - 2;
-    private const byte StringParameterID = (byte)HintParameterReaderWriter.HintParameterType.Text;
 
     private const int TextHintID = 1;
 
     private static readonly CumulativeFloat CumulativeOffset = new();
     private static readonly CumulativeFloat SubOffset = new();
     private static readonly List<NobreakInfo> Nobreaks = new();
-    ////private static readonly List<List<Keyframe>> Keyframes = new();
-    private static readonly List<ContentParameter> CurrentParameters = new();
+
+    private static readonly AlphaCurveHintEffect AlphaCurveHint = new(UnityEngine.AnimationCurve.Constant(0, 999999, 1));
 
     private static readonly ParameterHandler ParameterHandler = new(Nobreaks);
 
@@ -48,11 +42,20 @@ internal static class ElementCombiner
     /// <param name="elements">The elements to combine.</param>
     internal static void Combine(ReferenceHub hub, IEnumerable<Element> elements)
     {
+        CumulativeOffset.Clear();
+        Nobreaks.Clear();
+
         using NetworkWriterPooled totalWriter = NetworkWriterPool.Get();
 
         totalWriter.WriteUShort(NetworkMessageId<HintMessage>.Id);
         totalWriter.WriteByte(TextHintID);
-        totalWriter.WriteInt(-1); // hint effects
+        totalWriter.WriteFloat(999999); // TODO: calculate length
+
+        // write a constant alpha curve as an attempted fix for a bug
+        // where transparency of hints is reduced
+        // TODO: remove if this doesn't work
+        totalWriter.WriteInt(1);
+        totalWriter.WriteHintEffect(AlphaCurveHint);
 
         ParameterHandler.Setup(totalWriter);
 
@@ -61,12 +64,12 @@ internal static class ElementCombiner
         // prevent any overflows from line breaking
         contentWriter.WriteStringNoSize("<line-height=0>");
 
-        CumulativeFloat lastPosition = CumulativeFloat.Invalid;
-        CumulativeFloat lastOffset = default;
+        CumulativeFloat? lastPosition = null;
+        CumulativeFloat? lastOffset = null;
 
         bool isFirst = true;
 
-        CombinerContext context = new(contentWriter, Nobreaks, ParameterHandler);
+        CombinerContext context = new(hub, contentWriter, Nobreaks, ParameterHandler);
 
         foreach (Element element in elements)
         {
@@ -76,13 +79,14 @@ internal static class ElementCombiner
             }
 
             ParsedData data = element.GetParsedData(hub);
-            string text = data.ParsedString!; // TODO: remove null check
+            string text = data.ParsedString;
+
+            Logger.Debug($"Offset of elem: {data.Offset.GetValue()}");
 
             CumulativeFloat position;
 
             if (element.AnimatedPosition != null)
             {
-                // TODO: add offset, make scaled pos
                 AnimatedParameter parameter = new(element.AnimatedPosition.Value);
 
                 position = new();
@@ -90,8 +94,10 @@ internal static class ElementCombiner
             }
             else
             {
-                position = new(PositionUtils.ScaledToBaseline(element.Position));
+                position = new(PositionUtils.ScaledToBaseline(element.VerticalPosition));
             }
+
+            Logger.Debug($"Pos value: {position.GetValue()}");
 
             switch (element.VerticalAlign)
             {
@@ -110,27 +116,37 @@ internal static class ElementCombiner
             {
                 isFirst = false;
 
+                Logger.Debug($"Value before: {CumulativeOffset.GetValue()}");
                 CumulativeOffset.Add(position);
+                Logger.Debug($"Value after: {CumulativeOffset.GetValue()}");
             }
             else
             {
-                // TODO: check
-                CalculateOffset(lastPosition, lastOffset, position);
+                Logger.Debug("START VALS:");
+                Logger.Debug(lastPosition!.GetValue());
+                Logger.Debug(lastOffset!.GetValue());
+                Logger.Debug(position!.GetValue());
+                CalculateOffset(lastPosition!, lastOffset!, position);
+                Logger.Debug(SubOffset.GetValue());
 
                 SubOffset.WriteAsLineHeight(contentWriter, ParameterHandler, Nobreaks);
 
                 CumulativeOffset.Add(SubOffset);
             }
 
-            // begin writing
+            Logger.Debug($"Text: {text}");
+            Logger.Debug($"Cumulative: {CumulativeOffset.GetValue()}");
+
+            // write text interspersed with modifications
             ReadOnlySpan<char> buffer = text.AsSpan();
+
             for (int i = 0; i < data.Modifications.Count; i++)
             {
                 Modification current = data.Modifications[i];
 
-                int pos = current.Position;
+                Logger.Debug("Combining mod: " + (current is LinebreakModification).ToString());
 
-                // TODO: make faster perhaps
+                int pos = current.Position;
                 contentWriter.WriteChars(SplitUntil(ref buffer, pos));
 
                 current.Apply(context, ref buffer);
@@ -142,15 +158,18 @@ internal static class ElementCombiner
             CumulativeOffset.Add(data.Offset);
             lastPosition = position;
             lastOffset = data.Offset;
+
+            Logger.Debug($"Offset of elem (again): {data.Offset.GetValue()}");
         } // foreach (Element element in elements)
 
-        contentWriter.WriteStringNoSize("<size=0></mspace></cspace><line-height=0>."); // trigger trailing newlines
+        // ensure that trailing newlines (e.g. hello\n\n) are triggered by writing
+        // a single period
+        contentWriter.WriteStringNoSize("<size=0></mspace></cspace><line-height=0>.");
 
         using NetworkWriterPooled offsetWriter = NetworkWriterPool.Get();
 
         CumulativeOffset.WriteAsLineHeight(offsetWriter, ParameterHandler, Nobreaks);
 
-        // TODO: support offsetwriter for this
         int length = contentWriter.Position + offsetWriter.Position;
         if (contentWriter.Position + offsetWriter.Position > MaxStringLength)
         {
@@ -171,27 +190,20 @@ internal static class ElementCombiner
                     // get how much we can write before we encounter a linebreak
                     NobreakInfo nobreak = Nobreaks[i];
                     int start = nobreak.Start;
-                    int end = nobreak.End;
-
-                    // "Hello|world|"
-                    //   ^   ^     ^
-                    //   1   5     11
-                    //  pos start  end
-                    // max = 5 - 1 = 4
                     int maxWritable = start - pos;
 
                     // if false, the start of the nobreak is greater than what we can write in one pass
-                    // if that's the case, we just ignore it for now
+                    // if that's the case, we ignore it for now
                     // otherwise, just write it as usual
                     if (maxWritable < MaxStringLength)
                     {
                         ParameterHandler.AddStringParameter(contentWriter.buffer.AsSpan(pos, maxWritable));
 
                         // write the text that we can't break during
-                        contentWithParameterWriter.WriteBytes(contentWriter.buffer.AsSpan(start, end - start), false);
+                        contentWithParameterWriter.WriteBytes(contentWriter.buffer.AsSpan(start, nobreak.Length), false);
 
                         i++;
-                        pos = end;
+                        pos = nobreak.Start + nobreak.Length;
 
                         continue;
                     }
@@ -205,21 +217,28 @@ internal static class ElementCombiner
             }
             while (length > pos); // write while there is still stuff left
 
-            totalWriter.WriteNetworkWriter(contentWithParameterWriter, true);
+            ParameterHandler.Finish();
+
+            totalWriter.WriteNetworkWriter(contentWithParameterWriter, true); // write WITH size
         }
         else
         {
-            // TODO: make sure we write cumulativeoffset at the correct spot / length
-            totalWriter.WriteUShort((ushort)(contentWriter.Position + offsetWriter.Position));
+            ParameterHandler.Finish();
+
+            totalWriter.WriteUShort(checked((ushort)(length + 1))); // write size (of string)
 
             totalWriter.WriteNetworkWriter(offsetWriter, false);
             totalWriter.WriteNetworkWriter(contentWriter, false);
         }
 
-        ParameterHandler.Finish();
+        Logger.Debug($"Sending hint to player with {length} chars");
+        string offset = new(Encoding.UTF8.GetChars(offsetWriter.buffer, 0, offsetWriter.Position));
+        string content = new(Encoding.UTF8.GetChars(contentWriter.buffer, 0, contentWriter.Position));
+        Logger.Debug($"Text: {offset + content}");
 
-        // TODO: look into optimizing this further by reducing copies even more (directly add to batch, for example)
-        hub.connectionToClient.Send(totalWriter.ToArraySegment());
+        Logger.Debug($"Bytes :): {string.Join(" ", totalWriter.ToArraySegment())}");
+
+        hub.networkIdentity.connectionToClient.Send(totalWriter.ToArraySegment());
     }
 
     /// <summary>
@@ -227,11 +246,14 @@ internal static class ElementCombiner
     /// </summary>
     private static void CalculateOffset(CumulativeFloat hintOnePos, CumulativeFloat hintOneTotalLines, CumulativeFloat hintTwoPos)
     {
+        SubOffset.Clear();
+
         SubOffset.Add(hintOneTotalLines);
-        hintOneTotalLines.Multiply(2);
+        SubOffset.Multiply(2);
         SubOffset.Add(hintOnePos);
         SubOffset.Subtract(hintTwoPos);
-        SubOffset.Divide(2);
+
+        SubOffset.Divide(-2);
     }
 
     private static ReadOnlySpan<T> SplitUntil<T>(scoped ref ReadOnlySpan<T> span, int position)

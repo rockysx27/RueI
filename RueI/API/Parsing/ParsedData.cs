@@ -2,7 +2,6 @@
 
 using System.Collections.Generic;
 using RueI.API.Parsing.Modifications;
-using RueI.API.Parsing.Structs;
 
 /// <summary>
 /// Represents a parsed string, used for combining elements.
@@ -12,7 +11,7 @@ public readonly struct ParsedData
     /// <summary>
     /// The string that was parsed.
     /// </summary>
-    internal readonly string? ParsedString;
+    internal readonly string ParsedString;
 
     /// <summary>
     /// Gets the total vertical offset of the linebreaks within the string.

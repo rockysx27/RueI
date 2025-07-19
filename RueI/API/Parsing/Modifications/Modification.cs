@@ -1,7 +1,7 @@
 ﻿namespace RueI.API.Parsing.Modifications;
 
 using System;
-using Mirror;
+using RueI.API.Parsing;
 
 /// <summary>
 /// Represents a modification to the text of an element.

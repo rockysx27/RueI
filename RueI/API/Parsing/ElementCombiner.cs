@@ -78,7 +78,18 @@ internal static class ElementCombiner
                 ParameterHandler.SetElementParameters(element.Parameters);
             }
 
-            ParsedData data = element.GetParsedData(hub);
+            ParsedData data;
+            try
+            {
+                data = element.GetParsedData(hub);
+            }
+            catch (Exception e)
+            {
+                Logger.Error($"Error when trying to get the ParsedData of element, skipping: {e}");
+
+                continue;
+            }
+
             string text = data.ParsedString;
 
             Logger.Debug($"Offset of elem: {data.Offset.GetValue()}");

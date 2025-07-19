@@ -244,6 +244,12 @@ public sealed class Display
         this.updateNextFrame = false;
 
         ElementCombiner.Combine(this.hub, this.elements.Select(x => x.Value.Element)); // we don't use this.elements.Values, since that boxes (no way around it)
+
+        if (this.updateIntervalHeap.TryPeek(out var interval))
+        {
+            this.forcedUpdate = (float)interval.Value.TotalSeconds + Time.time;
+            this.forcedIsExternal = true;
+        }
     }
 
     /// <summary>

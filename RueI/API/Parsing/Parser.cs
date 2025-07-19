@@ -29,7 +29,7 @@ internal static class Parser
 
     private static readonly mscorlib.System.Collections.Generic.Stack<AnimatableFloat> SizeStack = new();
 
-    private static readonly CumulativeFloat Offset = null!;
+    private static readonly CumulativeFloat Offset = new();
     private static readonly char[] CharBuffer = new char[Constants.MaxTagLength];
     private static readonly IReadOnlyList<ContentParameter> CurrentParameters = null!; // safe, since we only access inside Parse (which sets this)
     private static readonly List<Modification> Modifications = new();
@@ -81,13 +81,11 @@ internal static class Parser
         { RichTextTag.VOffset, "voffset" },
         { RichTextTag.Size, "size" },
         { RichTextTag.Align, "align" },
-        { RichTextTag.Pos, "pos" },
         { RichTextTag.CloseNoparse, "/noparse" },
         { RichTextTag.CloseSize, "/size" },
         { RichTextTag.CloseVOffset, "/voffset" },
         { RichTextTag.CloseLineHeight, "/line-height" },
         { RichTextTag.CloseAlign, "/align" },
-        { RichTextTag.CloseAlign, "/pos" },
     };
 
     // TODO: rewrite all of this
@@ -160,6 +158,8 @@ internal static class Parser
 
     private static bool TryParseTag()
     {
+        Logger.Debug("Trying to parse tag");
+
         // keep track of count to ensure that our total size is less than Constants.MaxTagSize
         int count = 0;
         int start = position;
@@ -168,12 +168,19 @@ internal static class Parser
 
         while (TryGetNext(out char ch))
         {
+            if (!node.TryGetNode(TagHelpers.ToLowercaseFast(ch), out node))
+            {
+                break;
+            }
+
             lastPosition = position; // no need for backtracking
             count++;
             RichTextTag tag = node.Value;
 
             if (tag != default)
             {
+                Logger.Debug("Tag found: " + Enum.GetName(typeof(RichTextTag), tag));
+
                 // quick check to see if tag doesn't take in a parameter
                 if (tag >= RichTextTag.Noparse)
                 {
@@ -255,6 +262,13 @@ internal static class Parser
 
                     if (tag == RichTextTag.Align)
                     {
+                        if (!resolutionAlign)
+                        {
+                            lastPosition = position - 1;
+
+                            return false;
+                        }
+
                         lastPosition = position;
 
                         if (TryParseAlign(out AlignStyle align) && TryGetNext(out char terminator) && terminator == '>')
@@ -315,13 +329,6 @@ internal static class Parser
                     break;
                 }
             }
-
-            if (!node.TryGetNode(TagHelpers.ToLowercaseFast(ch), out node))
-            {
-                break;
-            }
-
-            position++;
         }
 
         // position - 1 since TryGetNext increases position by 1
@@ -587,6 +594,7 @@ internal static class Parser
         while (MoveNextMeasurement());
 
     EndLoop:
+        Logger.Debug("Failed to match tag");
         BreakTag();
 
         info = default;
@@ -737,6 +745,7 @@ internal static class Parser
 
         if (noparse)
         {
+            Modifications.Add(new CloseNoparseModification(pos));
             Modifications.Add(new NoparseModification(pos));
         }
         else

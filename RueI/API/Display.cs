@@ -232,7 +232,7 @@ public sealed class Display
 
             if (display.updateNextFrame)
             {
-                LabApi.Features.Console.Logger.Debug($"Update set, let's go");
+                LabApi.Features.Console.Logger.Debug($"Updating display");
 
                 display.FrameUpdate();
 
@@ -282,7 +282,7 @@ public sealed class Display
         // set BEFORE so that if ElementCombiner.Combine throws an exception we don't get error spam
         this.updateNextFrame = false;
 
-        ElementCombiner.Combine(this.hub, this.elements.Select(x => x.Value.Element)); // we don't use this.elements.Values, since that boxes (no way around it)
+        ElementCombiner.Combine(this.hub, this.elements.Where(x => !this.hiddenTags.Contains(x.Key)).Select(x => x.Value.Element)); // we don't use this.elements.Values, since that boxes (no way around it)
     }
 
     /// <summary>

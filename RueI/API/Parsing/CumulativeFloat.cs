@@ -181,7 +181,7 @@ internal class CumulativeFloat
             {
                 ref AnimatableFloat animatableFloat = ref this.curves[i];
 
-                animatableFloat.Multiplier /= Constants.EmSize;
+                ////animatableFloat.Multiplier /= Constants.EmSize;
 
                 int id = paramHandler.AddAnimatableFloat(in animatableFloat);
 
@@ -201,13 +201,27 @@ internal class CumulativeFloat
                 }
 
                 writer.WriteFormatItemNoBreak(id, nobreaks);
-                writer.WriteStringNoSize("e>\n");
+                writer.WriteStringNoSize(">\n");
             }
         }
 
-        // write as em to avoid being too big for the max size
-        writer.WriteStringNoSize("<line-height=");
-        writer.WriteFloatAsString(this.value / Constants.EmSize);
-        writer.WriteStringNoSize("e>\n<line-height=0>");
+        // uncommon path
+        if (this.value >= Constants.MaxValueSize)
+        {
+            float value = this.value;
+            do
+            {
+                writer.WriteStringNoSize("<line-height=");
+                writer.WriteFloatAsString(UnityEngine.Mathf.Min(value, Constants.MaxValueSize));
+                writer.WriteStringNoSize(">\n<line-height=0>");
+            }
+            while ((value -= Constants.MaxValueSize) > 0);
+        }
+        else
+        {
+            writer.WriteStringNoSize("<line-height=");
+            writer.WriteFloatAsString(this.value);
+            writer.WriteStringNoSize(">\n<line-height=0>");
+        }
     }
 }

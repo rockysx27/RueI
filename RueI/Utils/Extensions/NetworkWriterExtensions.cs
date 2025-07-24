@@ -15,7 +15,7 @@ using RueI.API.Parsing.Structs;
 /// <summary>
 /// Provides extensions for the <see cref="NetworkWriter"/> class to write <see cref="ReadOnlySpan{T}"/>s.
 /// </summary>
-internal static class NetworkWriterSpanExtensions
+internal static class NetworkWriterExtensions
 {
     private static readonly UTF8Encoding Encoding = new(false, true);
 
@@ -136,7 +136,7 @@ internal static class NetworkWriterSpanExtensions
 
             value /= 10;
         }
-        while (value >= 0);
+        while (value > 0);
 
         // reverse since we added the values in reverse order
         span[..writer.Position].Reverse();

@@ -27,6 +27,7 @@ public sealed class Display
     private readonly ValueSortedDictionary<Tag, StoredElement> elements = new();
     private readonly MinHeap<ExpiryInfo> expirationHeap = new(); // for when elements expire - smallest expires most recently
     private readonly MinHeap<TimeSpan> updateIntervalHeap = new(); // for dynamicelements, etc
+    private readonly HashSet<Tag> hiddenTags = new();
     private readonly ReferenceHub hub;
 
     private bool updateNextFrame = false;
@@ -48,6 +49,8 @@ public sealed class Display
     /// <returns>The player's corresponding display.</returns>
     public static Display Get(ReferenceHub hub)
     {
+        LabApi.Features.Console.Logger.Debug("Getting info for hub");
+
         if (hub == null)
         {
             throw new ArgumentNullException(nameof(hub));
@@ -136,6 +139,31 @@ public sealed class Display
     }
 
     /// <summary>
+    /// Sets the visibility of a <see cref="Tag"/>.
+    /// </summary>
+    /// <param name="tag">The <see cref="Tag"/> to set the visibility of.</param>
+    /// <param name="isVisible">Whether elements with the <see cref="Tag"/> should be visible.</param>
+    /// <remarks>
+    /// This method sets the visibility of any current or future elements with the <see cref="Tag"/>.
+    /// </remarks>
+    public void SetVisible(Tag tag, bool isVisible)
+    {
+        if (isVisible)
+        {
+            this.hiddenTags.Remove(tag);
+        }
+        else
+        {
+            this.hiddenTags.Add(tag);
+        }
+
+        if (!this.forcedIsExternal)
+        {
+            this.updateNextFrame = true;
+        }
+    }
+
+    /// <summary>
     /// Updates the display, refreshing any <see cref="DynamicElement"/>.
     /// </summary>
     public void Update()
@@ -171,6 +199,7 @@ public sealed class Display
     /// <param name="duration">The time to wait before updating.</param>
     internal void SetUpdateIn(float duration)
     {
+        LabApi.Features.Console.Logger.Debug($"External update done in {duration}");
         this.forcedUpdate = Time.time + duration;
         this.forcedIsExternal = true;
     }
@@ -206,6 +235,16 @@ public sealed class Display
                 LabApi.Features.Console.Logger.Debug($"Update set, let's go");
 
                 display.FrameUpdate();
+
+                if (display.updateIntervalHeap.TryPeek(out var interval))
+                {
+                    display.forcedUpdate = (float)interval.Value.TotalSeconds + Time.time;
+                    display.forcedIsExternal = true;
+                }
+                else
+                {
+                    display.forcedUpdate = float.PositiveInfinity;
+                }
             }
         }
     }
@@ -244,12 +283,6 @@ public sealed class Display
         this.updateNextFrame = false;
 
         ElementCombiner.Combine(this.hub, this.elements.Select(x => x.Value.Element)); // we don't use this.elements.Values, since that boxes (no way around it)
-
-        if (this.updateIntervalHeap.TryPeek(out var interval))
-        {
-            this.forcedUpdate = (float)interval.Value.TotalSeconds + Time.time;
-            this.forcedIsExternal = true;
-        }
     }
 
     /// <summary>

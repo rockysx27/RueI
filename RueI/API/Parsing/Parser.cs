@@ -31,7 +31,6 @@ internal static class Parser
 
     private static readonly CumulativeFloat Offset = new();
     private static readonly char[] CharBuffer = new char[Constants.MaxTagLength];
-    private static readonly IReadOnlyList<ContentParameter> CurrentParameters = null!; // safe, since we only access inside Parse (which sets this)
     private static readonly List<Modification> Modifications = new();
 
     private static readonly Trie<AlignStyle> AlignTrie = new(new[]
@@ -53,6 +52,7 @@ internal static class Parser
 
     private static string text = null!;
 
+    private static IReadOnlyList<ContentParameter> currentParameters = null!;
     private static bool noparse;
     private static bool noparseParsesEscapeSeq;
     private static bool noparseParsesFormat;
@@ -106,6 +106,7 @@ internal static class Parser
         noparseParsesEscapeSeq = element.NoparseSettings.HasFlagFast(Elements.Enums.NoparseSettings.ParsesEscapeSequences);
         noparseParsesFormat = element.NoparseSettings.HasFlagFast(Elements.Enums.NoparseSettings.ParsesFormatItems);
         resolutionAlign = element.ResolutionBasedAlign;
+        currentParameters = element.Parameters ?? Array.Empty<ContentParameter>();
 
         while (TryGetNext(out char ch))
         {
@@ -161,7 +162,7 @@ internal static class Parser
         Logger.Debug("Trying to parse tag");
 
         // keep track of count to ensure that our total size is less than Constants.MaxTagSize
-        int count = 0;
+        int count = 1;
         int start = position;
 
         Trie<RichTextTag>.RadixNode? node = TagTrie.Root;
@@ -252,7 +253,7 @@ internal static class Parser
                 }
                 else
                 {
-                    if (ch != '=')
+                    if (!TryGetNext(out char cur) || cur != '=')
                     {
                         // we've landed on a valid tag that takes a parameter,
                         // but the next char isn't = (e.g. <line-height> or <line-height!
@@ -289,13 +290,15 @@ internal static class Parser
                     }
 
                     // we never need to backtrack
-                    if (TryParseMeasurements(count, out MeasurementInfo info))
+                    if (TryParseMeasurements(ref count, out MeasurementInfo info))
                     {
                         AnimatableFloat value = default;
 
                         switch (tag)
                         {
                             case RichTextTag.LineHeight:
+                                Logger.Debug($"Setting line height to {info.Value}");
+
                                 lineHeight = value = info.ToAnimatableFloat(Constants.DefaultLineHeight);
                                 break;
                             case RichTextTag.Size:
@@ -311,15 +314,15 @@ internal static class Parser
                                 return false;
                         }
 
-                        int totalCount = position - start + 1;
+                        int length = position - start + 1;
 
                         if (value.IsAnimated)
                         {
-                            Modifications.Add(new AnimatedTagModification(start, totalCount, tag, in value)); // TODO: check for off by one errors
+                            Modifications.Add(new AnimatedTagModification(start, length, tag, in value)); // TODO: check for off by one errors
                         }
                         else
                         {
-                            Modifications.Add(new TagModification(start, totalCount, tag, value.AddendOrValue)); // TODO: check for off by one errors
+                            Modifications.Add(new TagModification(start, length, tag, value.AddendOrValue)); // TODO: check for off by one errors
                         }
 
                         return true;
@@ -406,9 +409,9 @@ internal static class Parser
                     // ^^^^^
                     // 01234
                     // we start at 1, end at 4, length = 3
-                    if (int.TryParse(text.AsSpan(start, length), out int result) && result >= 0)
+                    if (int.TryParse(text.AsSpan(start, length), NumberStyles.None, null, out int result))
                     {
-                        if (result >= CurrentParameters.Count)
+                        if (result >= currentParameters.Count)
                         {
                             Modifications.Add(new InvalidFormatItemModification(start - 1, length + 2)); // TODO: check for potential off by one errors
 
@@ -417,11 +420,8 @@ internal static class Parser
                             return false;
                         }
 
-                        // since we load the parameters in reverse order, we get the opposite index here
-                        int index = CurrentParameters.Count - result;
-
-                        Modifications.Add(new FormatItemModification(start - 1, length + 2, index)); // TODO: check for potential off by one errors
-                        num = index;
+                        Modifications.Add(new FormatItemModification(start - 1, length + 2, result)); // TODO: check for potential off by one errors
+                        num = result;
 
                         return true;
                     }
@@ -445,7 +445,7 @@ internal static class Parser
         return false;
     }
 
-    private static bool TryParseMeasurements(int count, out MeasurementInfo info)
+    private static bool TryParseMeasurements(ref int count, out MeasurementInfo info)
     {
         // TODO: support weird leading tag shit
         // TODO: break if too many spaces, support otehr weird space shit
@@ -464,7 +464,7 @@ internal static class Parser
 
         char ch;
 
-        bool MoveNextMeasurement()
+        bool MoveNextMeasurement(ref int count)
         {
             if (TryGetNext(out ch) && ++count <= Constants.MaxTagLength) // TODO: check
             {
@@ -476,7 +476,7 @@ internal static class Parser
             }
         }
 
-        if (MoveNextMeasurement())
+        if (MoveNextMeasurement(ref count))
         {
             type = ch switch
             {
@@ -529,7 +529,7 @@ internal static class Parser
                     }
                     else
                     {
-                        if (CurrentParameters[paramId] is not AnimatedParameter animated
+                        if (currentParameters[paramId] is not AnimatedParameter animated
                             || animated.Format != null // no format is allowed for tags
                             || animated.RoundToInt
                             || animated.Value.Any(x => x.value > Constants.MaxValueSize / 2))
@@ -549,23 +549,7 @@ internal static class Parser
 
                     return true;
                 default:
-                    if (unit == NotSet && type != MeasurementInfo.AdditionType.Absolute)
-                    {
-                        switch (ch)
-                        {
-                            case 'e':
-                                unit = MeasurementUnit.Pixels;
-                                break;
-                            case '%':
-                                unit = MeasurementUnit.Percentage;
-                                break;
-                            case ' ': // if there is no leading values, space breaks (no idea why)
-                            case 'p':
-                                unit = MeasurementUnit.Pixels;
-                                break;
-                        }
-                    }
-                    else if (TryParseFormatItem(out int num))
+                    if (TryParseFormatItem(out int num))
                     {
                         if (num == -1) // escape sequence, e.g. {{ -> add additional
                         {
@@ -587,11 +571,27 @@ internal static class Parser
                     {
                         CharBuffer[numDigits++] = ch;
                     }
+                    else if (unit == NotSet && type != MeasurementInfo.AdditionType.Absolute)
+                    {
+                        switch (ch)
+                        {
+                            case 'e':
+                                unit = MeasurementUnit.Pixels;
+                                break;
+                            case '%':
+                                unit = MeasurementUnit.Percentage;
+                                break;
+                            case ' ': // if there is no leading values, space breaks (no idea why)
+                            case 'p':
+                                unit = MeasurementUnit.Pixels;
+                                break;
+                        }
+                    }
 
                     break;
             }
         }
-        while (MoveNextMeasurement());
+        while (MoveNextMeasurement(ref count));
 
     EndLoop:
         Logger.Debug("Failed to match tag");
@@ -667,9 +667,7 @@ internal static class Parser
             return true;
         }
 
-        position++;
-
-        if (position < text.Length)
+        if (++position < text.Length)
         {
             switch (text[position])
             {

@@ -62,7 +62,7 @@ internal struct AnimatableFloat
     }
 
     /// <summary>
-    /// Gets an invaldi <see cref="AnimatableFloat"/>.
+    /// Gets an invalid <see cref="AnimatableFloat"/>.
     /// </summary>
     public static AnimatableFloat Invalid => new(float.NaN);
 

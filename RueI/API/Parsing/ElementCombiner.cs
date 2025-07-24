@@ -127,9 +127,7 @@ internal static class ElementCombiner
             {
                 isFirst = false;
 
-                Logger.Debug($"Value before: {CumulativeOffset.GetValue()}");
                 CumulativeOffset.Add(position);
-                Logger.Debug($"Value after: {CumulativeOffset.GetValue()}");
             }
             else
             {
@@ -158,7 +156,12 @@ internal static class ElementCombiner
                 Logger.Debug("Combining mod: " + (current is LinebreakModification).ToString());
 
                 int pos = current.Position;
-                contentWriter.WriteChars(SplitUntil(ref buffer, pos));
+
+                Logger.Debug($"Mod pos: {pos}");
+
+                int mapped = pos - (text.Length - buffer.Length);
+
+                contentWriter.WriteChars(SplitUntil(ref buffer, mapped));
 
                 current.Apply(context, ref buffer);
             }
@@ -175,7 +178,7 @@ internal static class ElementCombiner
 
         // ensure that trailing newlines (e.g. hello\n\n) are triggered by writing
         // a single period
-        contentWriter.WriteStringNoSize("<size=0></mspace></cspace><line-height=0>.");
+        contentWriter.WriteStringNoSize("<line-height=0>\n<alpha=#00><scale=0>.");
 
         using NetworkWriterPooled offsetWriter = NetworkWriterPool.Get();
 

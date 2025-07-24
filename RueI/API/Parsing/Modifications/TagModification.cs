@@ -4,7 +4,6 @@ using System;
 using Mirror;
 using RueI.API.Parsing;
 using RueI.API.Parsing.Enums;
-using RueI.Utils;
 using RueI.Utils.Extensions;
 
 /// <summary>
@@ -37,9 +36,7 @@ internal class TagModification : SkipNextModification
         writer.WriteUtf8Char('<');
         writer.WriteStringNoSize(Parser.TagNames[this.tagType]);
         writer.WriteUtf8Char('=');
-        writer.WriteFloatAsString(this.value / Constants.EmSize);
-
-        writer.WriteUtf8Char('e');
+        writer.WriteFloatAsString(this.value);
         writer.WriteUtf8Char('>');
 
         base.Apply(context, ref buffer);

@@ -25,24 +25,23 @@ internal static class SendHintPatch
     {
         LocalBuilder local = generator.DeclareLocal(typeof(ReferenceHub));
         Label label = generator.DefineLabel();
+
         MethodInfo method = typeof(ReferenceHub).GetMethods().First(
             x => x.Name == nameof(ReferenceHub.TryGetHub) && x.GetParameters().Any(x => x.ParameterType == typeof(NetworkConnection)));
 
 #pragma warning disable SA1114 // Parameter list should follow declaration
 #pragma warning disable SA1115 // Parameter should follow comma
 #pragma warning disable SA1515 // Single-line comma should be preceded by blank line
-        return new CodeMatcher(instructions, generator)
+        CodeMatcher matcher = new CodeMatcher(instructions, generator)
             .MatchEndForward(
                 // if (hint == null) throw new ArgumentNullException("hint")
-                new CodeMatch(OpCodes.Ldstr, "hint"),
-                new CodeMatch(x => x.opcode == OpCodes.Newobj),
-                new CodeMatch(OpCodes.Throw))
+                new CodeMatch(OpCodes.Ldloc_0),
+                new CodeMatch(OpCodes.Callvirt, Method(typeof(HashSet<NetworkConnection>), nameof(HashSet<NetworkConnection>.Contains))),
+                new CodeMatch(x => x.opcode == OpCodes.Brtrue_S))
             .Advance(1)
             .InsertAndAdvance(
                 // if (ReferenceHub.TryGetHub(base.netIdentity.connectionToClient, out ReferenceHub hub))
-                new CodeInstruction(OpCodes.Ldarg_0),
-                new(OpCodes.Call, PropertyGetter(typeof(NetworkBehaviour), nameof(NetworkBehaviour.netIdentity))),
-                new(OpCodes.Callvirt, PropertyGetter(typeof(NetworkIdentity), nameof(NetworkIdentity.connectionToClient))),
+                new CodeInstruction(OpCodes.Ldloc_0),
                 new(OpCodes.Ldloca, local.LocalIndex),
                 new(OpCodes.Call, method),
                 new(OpCodes.Brfalse_S, label),
@@ -57,7 +56,8 @@ internal static class SendHintPatch
 #pragma warning restore SA1115 // Parameter should follow comma
 #pragma warning restore SA1515 // Single-line comma should be preceded by blank line
             .Advance(1)
-            .AddLabels(new Label[] { label })
-            .InstructionEnumeration();
+            .AddLabels(new Label[] { label });
+
+        return matcher.InstructionEnumeration();
     }
 }

@@ -11,7 +11,7 @@ using RueI.Utils.Extensions;
 internal abstract class LinebreakModification : SkipNextModification
 {
     private const string Prefix = "<line-height=";
-    private const string Suffix = "e>\n<line-height=0>";
+    private const string Suffix = ">\n<line-height=0>";
 
     private static readonly byte[] PrefixBytes = Encoding.UTF8.GetBytes(Prefix);
     private static readonly byte[] SuffixBytes = Encoding.UTF8.GetBytes(Suffix);

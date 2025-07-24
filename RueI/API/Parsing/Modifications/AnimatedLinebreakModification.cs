@@ -2,7 +2,6 @@
 
 using RueI.API.Parsing;
 using RueI.API.Parsing.Structs;
-using RueI.Utils;
 using RueI.Utils.Extensions;
 
 /// <summary>
@@ -27,7 +26,7 @@ internal class AnimatedLinebreakModification : LinebreakModification
     /// <inheritdoc/>
     protected override void WriteLineHeightValue(CombinerContext context)
     {
-        int id = context.ParameterHandler.AddAnimatableFloat(this.lineHeight, 1 / Constants.EmSize);
+        int id = context.ParameterHandler.AddAnimatableFloat(this.lineHeight);
 
         context.ContentWriter.WriteFormatItemNoBreak(id, context.Nobreaks);
     }

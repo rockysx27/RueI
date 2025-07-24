@@ -6,7 +6,6 @@ using Mirror;
 using RueI.API.Parsing;
 using RueI.API.Parsing.Enums;
 using RueI.API.Parsing.Structs;
-using RueI.Utils;
 using RueI.Utils.Extensions;
 
 /// <summary>
@@ -41,7 +40,7 @@ internal class AnimatedTagModification : SkipNextModification
         writer.WriteStringNoSize(Parser.TagNames[this.tagType]);
         writer.WriteUtf8Char('=');
 
-        int id = context.ParameterHandler.AddAnimatableFloat(this.value, 1 / Constants.EmSize);
+        int id = context.ParameterHandler.AddAnimatableFloat(this.value);
 
         writer.WriteFormatItemNoBreak(id, context.Nobreaks);
 

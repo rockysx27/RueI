@@ -159,8 +159,6 @@ internal static class Parser
 
     private static bool TryParseTag()
     {
-        Logger.Debug("Trying to parse tag");
-
         // keep track of count to ensure that our total size is less than Constants.MaxTagSize
         int count = 1;
         int start = position;
@@ -180,8 +178,6 @@ internal static class Parser
 
             if (tag != default)
             {
-                Logger.Debug("Tag found: " + Enum.GetName(typeof(RichTextTag), tag));
-
                 // quick check to see if tag doesn't take in a parameter
                 if (tag >= RichTextTag.Noparse)
                 {
@@ -297,8 +293,6 @@ internal static class Parser
                         switch (tag)
                         {
                             case RichTextTag.LineHeight:
-                                Logger.Debug($"Setting line height to {info.Value}");
-
                                 lineHeight = value = info.ToAnimatableFloat(Constants.DefaultLineHeight);
                                 break;
                             case RichTextTag.Size:
@@ -594,7 +588,6 @@ internal static class Parser
         while (MoveNextMeasurement(ref count));
 
     EndLoop:
-        Logger.Debug("Failed to match tag");
         BreakTag();
 
         info = default;

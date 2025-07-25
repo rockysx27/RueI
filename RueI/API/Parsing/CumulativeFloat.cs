@@ -45,12 +45,6 @@ internal class CumulativeFloat
     public bool IsInvalid => float.IsNaN(this.value);
 
     /// <summary>
-    /// Gets the value.
-    /// </summary>
-    /// <returns>The value.</returns>
-    public float GetValue() => this.value; // TODO: remove
-
-    /// <summary>
     /// Adds a <see cref="CumulativeFloat"/> to this <see cref="CumulativeFloat"/>.
     /// </summary>
     /// <param name="cumulativeFloat">The <see cref="CumulativeFloat"/> to add.</param>

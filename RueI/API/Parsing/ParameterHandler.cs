@@ -60,8 +60,6 @@ internal sealed class ParameterHandler
 
         int oldPos = this.writer.Position;
 
-        LabApi.Features.Console.Logger.Debug($"Finished parameters with {this.numParams} params");
-
         this.writer.Position = this.countPosition;
         this.writer.WriteInt(this.numParams);
 

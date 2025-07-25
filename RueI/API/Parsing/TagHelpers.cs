@@ -52,9 +52,6 @@ internal static class TagHelpers
             value += float.Parse(decimalPart, Style) / Mathf.Pow(10, decimalPart.Length);
         }
 
-        LabApi.Features.Console.Logger.Debug($"Value: {value}");
-        LabApi.Features.Console.Logger.Debug($"Int part: {integerPart.ToString()}");
-
         return value;
     }
 }

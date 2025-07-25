@@ -92,8 +92,6 @@ internal static class ElementCombiner
 
             string text = data.ParsedString;
 
-            Logger.Debug($"Offset of elem: {data.Offset.GetValue()}");
-
             CumulativeFloat position;
 
             if (element.AnimatedPosition != null)
@@ -107,8 +105,6 @@ internal static class ElementCombiner
             {
                 position = new(PositionUtils.ScaledToBaseline(element.VerticalPosition));
             }
-
-            Logger.Debug($"Pos value: {position.GetValue()}");
 
             switch (element.VerticalAlign)
             {
@@ -131,20 +127,12 @@ internal static class ElementCombiner
             }
             else
             {
-                Logger.Debug("START VALS:");
-                Logger.Debug(lastPosition!.GetValue());
-                Logger.Debug(lastOffset!.GetValue());
-                Logger.Debug(position!.GetValue());
                 CalculateOffset(lastPosition!, lastOffset!, position);
-                Logger.Debug(SubOffset.GetValue());
 
                 SubOffset.WriteAsLineHeight(contentWriter, ParameterHandler, Nobreaks);
 
                 CumulativeOffset.Add(SubOffset);
             }
-
-            Logger.Debug($"Text: {text}");
-            Logger.Debug($"Cumulative: {CumulativeOffset.GetValue()}");
 
             // write text interspersed with modifications
             ReadOnlySpan<char> buffer = text.AsSpan();
@@ -152,14 +140,7 @@ internal static class ElementCombiner
             for (int i = 0; i < data.Modifications.Count; i++)
             {
                 Modification current = data.Modifications[i];
-
-                Logger.Debug("Combining mod: " + (current is LinebreakModification).ToString());
-
-                int pos = current.Position;
-
-                Logger.Debug($"Mod pos: {pos}");
-
-                int mapped = pos - (text.Length - buffer.Length);
+                int mapped = current.Position - (text.Length - buffer.Length);
 
                 contentWriter.WriteChars(SplitUntil(ref buffer, mapped));
 
@@ -172,8 +153,6 @@ internal static class ElementCombiner
             CumulativeOffset.Add(data.Offset);
             lastPosition = position;
             lastOffset = data.Offset;
-
-            Logger.Debug($"Offset of elem (again): {data.Offset.GetValue()}");
         } // foreach (Element element in elements)
 
         // ensure that trailing newlines (e.g. hello\n\n) are triggered by writing
@@ -240,17 +219,9 @@ internal static class ElementCombiner
             ParameterHandler.Finish();
 
             totalWriter.WriteUShort(checked((ushort)(length + 1))); // write size (of string)
-
             totalWriter.WriteNetworkWriter(offsetWriter, false);
             totalWriter.WriteNetworkWriter(contentWriter, false);
         }
-
-        Logger.Debug($"Sending hint to player with {length} chars");
-        string offset = new(Encoding.UTF8.GetChars(offsetWriter.buffer, 0, offsetWriter.Position));
-        string content = new(Encoding.UTF8.GetChars(contentWriter.buffer, 0, contentWriter.Position));
-        Logger.Debug($"Text: {offset + content}");
-
-        Logger.Debug($"Bytes :): {string.Join(" ", totalWriter.ToArraySegment())}");
 
         hub.networkIdentity.connectionToClient.Send(totalWriter.ToArraySegment());
     }

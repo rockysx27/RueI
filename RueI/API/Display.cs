@@ -49,8 +49,6 @@ public sealed class Display
     /// <returns>The player's corresponding display.</returns>
     public static Display Get(ReferenceHub hub)
     {
-        LabApi.Features.Console.Logger.Debug("Getting info for hub");
-
         if (hub == null)
         {
             throw new ArgumentNullException(nameof(hub));
@@ -199,7 +197,6 @@ public sealed class Display
     /// <param name="duration">The time to wait before updating.</param>
     internal void SetUpdateIn(float duration)
     {
-        LabApi.Features.Console.Logger.Debug($"External update done in {duration}");
         this.forcedUpdate = Time.time + duration;
         this.forcedIsExternal = true;
     }
@@ -222,8 +219,6 @@ public sealed class Display
 
             while (display.expirationHeap.TryPeek(out var node) && node.Value.ExpiresAt < time)
             {
-                LabApi.Features.Console.Logger.Debug($"Popping next");
-
                 display.expirationHeap.Pop();
                 display.elements.Remove(node.Value.Tag);
 
@@ -232,8 +227,6 @@ public sealed class Display
 
             if (display.updateNextFrame)
             {
-                LabApi.Features.Console.Logger.Debug($"Updating display");
-
                 display.FrameUpdate();
 
                 if (display.updateIntervalHeap.TryPeek(out var interval))
@@ -277,8 +270,6 @@ public sealed class Display
 
     private void FrameUpdate()
     {
-        LabApi.Features.Console.Logger.Debug($"Updating display with {this.elements.Count} elements");
-
         // set BEFORE so that if ElementCombiner.Combine throws an exception we don't get error spam
         this.updateNextFrame = false;
 

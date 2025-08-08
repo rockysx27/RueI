@@ -31,13 +31,13 @@ internal class RueIPlugin : Plugin
     {
         this.harmony.PatchAll();
 
-        Display.RegisterEvents();
+        RueDisplay.RegisterEvents();
     }
 
     public override void Disable()
     {
         this.harmony.UnpatchAll();
 
-        Display.UnregisterEvents();
+        RueDisplay.UnregisterEvents();
     }
 }

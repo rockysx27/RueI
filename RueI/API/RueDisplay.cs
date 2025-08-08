@@ -14,14 +14,14 @@ using RueI.Utils.Collections;
 using UnityEngine;
 
 /// <summary>
-/// Represents a display for a specific player.
+/// Represents a viewport for a specific player.
 /// </summary>
 /// <remarks>
-/// Every player has a <see cref="Display"/>, which is used by RueI to keep track of their elements and send them hints.
+/// Every player has a <see cref="RueDisplay"/>, which is used by RueI to keep track of their elements and send them hints.
 /// </remarks>
-public sealed class Display
+public sealed class RueDisplay
 {
-    private static readonly Dictionary<ReferenceHub, Display> Displays = new();
+    private static readonly Dictionary<ReferenceHub, RueDisplay> Displays = new();
 
     // dictionary is sorted by z-index in ascending order
     private readonly ValueSortedDictionary<Tag, StoredElement> elements = new();
@@ -37,7 +37,7 @@ public sealed class Display
     private float forcedUpdate = float.PositiveInfinity;
     private bool forcedIsExternal = false;
 
-    private Display(ReferenceHub hub)
+    private RueDisplay(ReferenceHub hub)
     {
         this.hub = hub;
     }
@@ -47,14 +47,14 @@ public sealed class Display
     /// </summary>
     /// <param name="hub">The <see cref="ReferenceHub"/> to get the display of.</param>
     /// <returns>The player's corresponding display.</returns>
-    public static Display Get(ReferenceHub hub)
+    public static RueDisplay Get(ReferenceHub hub)
     {
         if (hub == null)
         {
             throw new ArgumentNullException(nameof(hub));
         }
 
-        return Displays.GetOrAdd(hub, () => new Display(hub));
+        return Displays.GetOrAdd(hub, () => new RueDisplay(hub));
     }
 
     /// <summary>
@@ -62,7 +62,7 @@ public sealed class Display
     /// </summary>
     /// <param name="player">The <see cref="ReferenceHub"/> to get the display of.</param>
     /// <returns>The player's corresponding display.</returns>
-    public static Display Get(Player player)
+    public static RueDisplay Get(Player player)
     {
         if (player == null)
         {
@@ -73,41 +73,60 @@ public sealed class Display
     }
 
     /// <summary>
-    /// Adds an <see cref="Element"/> with a unique <see cref="Tag"/> to this <see cref="Display"/>.
+    /// Adds an <see cref="Element"/> with a unique <see cref="Tag"/> to this <see cref="RueDisplay"/>.
     /// </summary>
     /// <param name="tag">A <see cref="Tag"/> to use. If an <see cref="Element"/> already has this tag, it will be replaced.</param>
     /// <param name="element">The <see cref="Element"/> to add.</param>
-    public void Show(Tag tag, Element element) => this.Show(
+    public void Show(Tag tag, Element element) => this.AddElement(
         tag ?? throw new ArgumentNullException(nameof(tag)),
         element ?? throw new ArgumentNullException(nameof(element)),
         float.NaN);
 
     /// <summary>
-    /// Adds an <see cref="Element"/> with a unique <see cref="Tag"/> to this <see cref="Display"/> for a certain period of time.
+    /// Adds an <see cref="Element"/> with a unique <see cref="Tag"/> to this <see cref="RueDisplay"/> for a certain duration.
     /// </summary>
-    /// <param name="tag">A <see cref="Tag"/> to use. If an <see cref="Element"/> already has this tag, it will be replaced.</param>
+    /// <param name="tag"><inheritdoc cref="Show(Tag, Element)" path="/param[@name='tag']"/></param>
     /// <param name="element">The <see cref="Element"/> to add.</param>
-    /// <param name="duration">A <see cref="TimeSpan"/> indicating how long to show the <see cref="Element"/> for.</param>
-    public void Show(Tag tag, Element element, TimeSpan duration) => this.Show(
+    /// <param name="duration">The duration to show the element, in seconds.</param>
+    public void Show(Tag tag, Element element, float duration) => this.AddElement(
         tag ?? throw new ArgumentNullException(nameof(tag)),
         element ?? throw new ArgumentNullException(nameof(element)),
-        Time.time + (float)duration.TotalSeconds);
+        Time.time + duration);
 
     /// <summary>
-    /// Adds an <see cref="Element"/> to this <see cref="Display"/> for a certain period of time.
+    /// Adds an <see cref="Element"/> to this <see cref="RueDisplay"/> for a certain duration.
     /// </summary>
     /// <param name="element">The <see cref="Element"/> to add.</param>
-    /// <param name="duration">A <see cref="TimeSpan"/> indicating how long to show the <see cref="Element"/> for.</param>
+    /// <param name="duration"><inheritdoc cref="Show(Tag, Element, float)" path="/param[@name='duration']"/></param>
     /// <remarks>
-    /// When adding an element using this method, it will not have a <see cref="Tag"/>. Therefore, there is no way to remove the element later.
+    /// When adding an element using this method, it will not have a <see cref="Tag"/>.
+    /// Therefore, there is no way to remove the element early.
     /// </remarks>
-    public void Show(Element element, TimeSpan duration) => this.Show(
+    public void Show(Element element, float duration) => this.AddElement(
         new(), // new() results in a tag that is only equal to itself
         element ?? throw new ArgumentNullException(nameof(element)),
-        Time.time + (float)duration.TotalSeconds);
+        Time.time + duration);
 
     /// <summary>
-    /// Removes the element with the given tag from the <see cref="Display"/>, if there is one.
+    /// Adds an <see cref="Element"/> with a unique <see cref="Tag"/> to this <see cref="RueDisplay"/> for a certain period of time.
+    /// </summary>
+    /// <param name="tag"><inheritdoc cref="Show(Tag, Element)" path="/param[@name='tag']"/></param>
+    /// <param name="element">The <see cref="Element"/> to add.</param>
+    /// <param name="duration">A <see cref="TimeSpan"/> indicating how long to show the <see cref="Element"/> for.</param>
+    public void Show(Tag tag, Element element, TimeSpan duration) => this.Show(tag, element, (float)duration.TotalSeconds);
+
+    /// <summary>
+    /// <inheritdoc cref="Show(Element, float)" path="/summary"/>
+    /// </summary>
+    /// <param name="element">The <see cref="Element"/> to add.</param>
+    /// <param name="duration"><inheritdoc cref="Show(Tag, Element, TimeSpan)" path="/param[@name='duration']"/></param>
+    /// <remarks>
+    /// <inheritdoc cref="Show(Element, float)" path="/remarks"/>
+    /// </remarks>
+    public void Show(Element element, TimeSpan duration) => this.Show(element, (float)duration.TotalSeconds);
+
+    /// <summary>
+    /// Removes the element with the given tag from the <see cref="RueDisplay"/>, if there is one.
     /// </summary>
     /// <param name="tag">The tag for which remove the associated <see cref="Element"/>.</param>
     public void Remove(Tag tag)
@@ -170,7 +189,7 @@ public sealed class Display
     }
 
     /// <summary>
-    /// Registers the <see cref="Display"/> events.
+    /// Registers the <see cref="RueDisplay"/> events.
     /// </summary>
     internal static void RegisterEvents()
     {
@@ -182,7 +201,7 @@ public sealed class Display
     }
 
     /// <summary>
-    /// Unregisters the <see cref="Display"/> events.
+    /// Unregisters the <see cref="RueDisplay"/> events.
     /// </summary>
     internal static void UnregisterEvents()
     {
@@ -208,7 +227,7 @@ public sealed class Display
     {
         float time = Time.time;
 
-        foreach (Display display in Displays.Values)
+        foreach (RueDisplay display in Displays.Values)
         {
             if (display.forcedUpdate < time)
             {
@@ -242,7 +261,7 @@ public sealed class Display
         }
     }
 
-    private void Show(Tag tag, Element element, float expireAt)
+    private void AddElement(Tag tag, Element element, float expireAt)
     {
         StoredElement storedElement = new()
         {

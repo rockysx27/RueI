@@ -48,10 +48,10 @@ internal static class SendHintPatch
 
                 // Display.Get(hub).SetUpdateIn(hint.DurationScalar);
                 new(OpCodes.Ldloc, local.LocalIndex),
-                new(OpCodes.Call, Method(typeof(Display), nameof(Display.Get), new Type[] { typeof(ReferenceHub) })),
+                new(OpCodes.Call, Method(typeof(RueDisplay), nameof(RueDisplay.Get), new Type[] { typeof(ReferenceHub) })),
                 new(OpCodes.Ldarg_1),
                 new(OpCodes.Callvirt, PropertyGetter(typeof(DisplayableObject<SharedHintData>), nameof(DisplayableObject<SharedHintData>.DurationScalar))),
-                new(OpCodes.Callvirt, Method(typeof(Display), nameof(Display.SetUpdateIn))))
+                new(OpCodes.Callvirt, Method(typeof(RueDisplay), nameof(RueDisplay.SetUpdateIn))))
 #pragma warning restore SA1114 // Parameter list should follow declaration
 #pragma warning restore SA1115 // Parameter should follow comma
 #pragma warning restore SA1515 // Single-line comma should be preceded by blank line

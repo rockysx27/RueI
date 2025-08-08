@@ -38,9 +38,9 @@ public class DynamicElement : Element
     }
 
     /// <summary>
-    /// Gets or initializes an interval for how often a <see cref="Display"/> with this <see cref="DynamicElement"/>
+    /// Gets or initializes an interval for how often a <see cref="RueDisplay"/> with this <see cref="DynamicElement"/>
     /// should be automatically updated, or <see langword="null"/> if the <see cref="DynamicElement"/> should not
-    /// automatically update a <see cref="Display"/>.
+    /// automatically update a <see cref="RueDisplay"/>.
     /// </summary>
     public TimeSpan? UpdateInterval { get; init; }
 

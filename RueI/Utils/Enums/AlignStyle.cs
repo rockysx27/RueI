@@ -8,7 +8,7 @@ public enum AlignStyle
     /// <summary>
     /// Indicates that the text should be left-aligned.
     /// </summary>
-    Left,
+    Left = 1,
 
     /// <summary>
     /// Indicates that the text should be center-aligned.

@@ -8,8 +8,9 @@ using RueI.API.Parsing;
 /// Represents a basic element with fixed text.
 /// </summary>
 /// <remarks>
-/// As its name suggests, the <see cref="BasicElement"/> is a simple element
-/// that is good enough for most use cases.
+/// The <see cref="BasicElement"/> is a simple element with fixed text.
+/// To update the text of a <see cref="BasicElement"/>, you can send the player
+/// a new <see cref="BasicElement"/> with the same <see cref="Tag"/>.
 /// </remarks>
 public class BasicElement : Element
 {

@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using global::Utils.Networking;
 using Hints;
 using LabApi.Features.Console;
@@ -67,8 +66,6 @@ internal static class ElementCombiner
         CumulativeFloat? lastPosition = null;
         CumulativeFloat? lastOffset = null;
 
-        bool isFirst = true;
-
         CombinerContext context = new(hub, contentWriter, Nobreaks, ParameterHandler);
 
         foreach (Element element in elements)
@@ -119,15 +116,13 @@ internal static class ElementCombiner
                     break;
             }
 
-            if (isFirst)
+            if (lastPosition == null)
             {
-                isFirst = false;
-
                 CumulativeOffset.Add(position);
             }
             else
             {
-                CalculateOffset(lastPosition!, lastOffset!, position);
+                CalculateOffset(lastPosition, lastOffset!, position);
 
                 SubOffset.WriteAsLineHeight(contentWriter, ParameterHandler, Nobreaks);
 
@@ -222,6 +217,12 @@ internal static class ElementCombiner
             totalWriter.WriteNetworkWriter(offsetWriter, false);
             totalWriter.WriteNetworkWriter(contentWriter, false);
         }
+
+#if DEBUG
+        string offset = new(Encoding.UTF8.GetChars(offsetWriter.buffer, 0, offsetWriter.Position));
+        string content = new(Encoding.UTF8.GetChars(contentWriter.buffer, 0, contentWriter.Position));
+        LabApi.Features.Console.Logger.Debug($"Text: {offset + content}");
+#endif
 
         hub.networkIdentity.connectionToClient.Send(totalWriter.ToArraySegment());
     }

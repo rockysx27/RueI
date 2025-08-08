@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using LabApi.Features.Console;
 using RueI.API.Elements;
 using RueI.API.Elements.Parameters;
 using RueI.API.Parsing.Enums;
@@ -79,7 +78,7 @@ internal static class Parser
         { RichTextTag.Noparse, "noparse" },
         { RichTextTag.LineHeight, "line-height" },
         { RichTextTag.VOffset, "voffset" },
-        { RichTextTag.Size, "size" },
+        ////{ RichTextTag.Size, "size" }, TODO: support size
         { RichTextTag.Align, "align" },
         { RichTextTag.CloseNoparse, "/noparse" },
         { RichTextTag.CloseSize, "/size" },
@@ -159,6 +158,7 @@ internal static class Parser
 
     private static bool TryParseTag()
     {
+        // TODO: check this code
         // keep track of count to ensure that our total size is less than Constants.MaxTagSize
         int count = 1;
         int start = position;
@@ -184,6 +184,15 @@ internal static class Parser
                     if (noparse && tag != RichTextTag.CloseNoparse)
                     {
                         break;
+                    }
+
+                    lastPosition = position;
+
+                    // TODO: check this
+                    if (!TryGetNext(out ch))
+                    {
+                        BreakTag();
+                        return false;
                     }
 
                     switch (ch)
@@ -228,6 +237,7 @@ internal static class Parser
                                     SizeStack.TryPop(out _);
                                     break;
                                 case RichTextTag.CloseVOffset:
+                                    break;
                                 case RichTextTag.CloseLineHeight:
                                     lineHeight = AnimatableFloat.Invalid;
                                     break;
@@ -238,6 +248,11 @@ internal static class Parser
                                     noparse = false;
                                     break;
                                 case RichTextTag.CloseAlign:
+                                    if (alignment == AlignStyle.Right)
+                                    {
+                                        Modifications.Add(new AlignSpaceModification(false, start));
+                                    }
+
                                     alignment = NoAlignStyle;
                                     break;
                                 default:
@@ -245,6 +260,11 @@ internal static class Parser
                             }
 
                             return true;
+                        default:
+                            BreakTag();
+                            position = lastPosition;
+
+                            return false;
                     }
                 }
                 else
@@ -545,6 +565,9 @@ internal static class Parser
                 default:
                     if (TryParseFormatItem(out int num))
                     {
+                        goto EndLoop; // TODO: add support for format items
+
+#pragma warning disable CS0162 // Unreachable code detected
                         if (num == -1) // escape sequence, e.g. {{ -> add additional
                         {
                             count++;
@@ -560,6 +583,7 @@ internal static class Parser
                             paramId = num;
                             decimalPoint = 0; // so we don't also have to check paramId
                         }
+#pragma warning restore CS0162 // Unreachable code detected
                     }
                     else if (TagHelpers.IsDigitFast(ch) && paramId == -1 && !comma)
                     {
@@ -718,9 +742,9 @@ internal static class Parser
 
         while (TryGetNext(out char ch) && node.TryGetNode(ch, out node))
         {
-            if (node.Value is AlignStyle alignStyle)
+            if (node.Value != default)
             {
-                align = alignStyle;
+                align = node.Value;
 
                 return true;
             }

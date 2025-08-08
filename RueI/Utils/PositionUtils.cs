@@ -28,24 +28,17 @@ public class PositionUtils
     public static float BaselineToScaled(float pos) => (pos - BaselineAddend) / -BaselineMultiplier;
 
     /// <summary>
-    /// Gets the offset necessary to push a hint to the right edge of the screen.
+    /// Gets the offset necessary to push a hint to the edge of the screen.
     /// </summary>
     /// <param name="aspectRatio">The aspect ratio of the player.</param>
-    /// <returns>The position offset needed to place the hint on the right-hand side of the screen.</returns>
-    internal static float RightEdgeOffset(float aspectRatio)
+    /// <returns>The position offset needed to place the hint on edge of the screen.</returns>
+    internal static float EdgeOffset(float aspectRatio)
     {
         const float Base = 1080f - 1f; // slight padding
         const float DisplayAreaWidth = 1200f;
 
-        return Mathf.Min(((aspectRatio * Base) - DisplayAreaWidth) / 2f, DisplayAreaWidth);
+        return -Mathf.Min(((aspectRatio * Base) - DisplayAreaWidth) / 2f, DisplayAreaWidth);
     }
-
-    /// <summary>
-    /// Gets the offset necessary to push a hint to the left edge of the screen.
-    /// </summary>
-    /// <param name="aspectRatio">The aspect ratio of the player.</param>
-    /// <returns>The position offset needed to place the hint on the left-hand side of the screen.</returns>
-    internal static float LeftEdgeOffset(float aspectRatio) => -RightEdgeOffset(aspectRatio);
 
     /// <summary>
     /// Creates a <see cref="AnimatableFloat"/> for a <see cref="AnimatedParameter"/> as a baseline position.

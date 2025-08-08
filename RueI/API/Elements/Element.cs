@@ -13,6 +13,11 @@ using UnityEngine;
 /// <summary>
 /// Represents text within a <see cref="Display"/>.
 /// </summary>
+/// <remarks>
+/// <see cref="Element"/>s are how you show text to a player using RueI. You can
+/// create an instance of a class that derives from <see cref="Element"/>, such as
+/// <see cref="BasicElement"/> or <see cref="DynamicElement"/>, and show the text to a player.
+/// </remarks>
 public abstract class Element
 {
     private ReadOnlyCollection<ContentParameter>? parameters;
@@ -34,11 +39,11 @@ public abstract class Element
     /// <summary>
     /// Gets a value indicating whether align tags will align to the very edge of the screen, based on the resolution.
     /// </summary>
-    public bool ResolutionBasedAlign { get; } = false;
+    public bool ResolutionBasedAlign { get; init; } = false;
 
     /// <summary>
     /// Gets or initializes the behavior of <c>noparse</c> tags in the <see cref="Element"/>.
-    /// </summary>w
+    /// </summary>
     /// <remarks>
     /// This allows for custom behavior when parsing certain values in the text of the <see cref="Element"/>.
     /// This prevents players from bypassing <c>noparse</c> and breaking hints.

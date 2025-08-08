@@ -32,16 +32,12 @@ internal class AlignSpaceModification : Modification
 
         float aspectRatio = context.Hub.aspectRatioSync.AspectRatio;
 
-        if (this.isLeft)
+        context.ContentWriter.WriteFloatAsString(PositionUtils.EdgeOffset(aspectRatio));
+        context.ContentWriter.WriteUtf8Char('>');
+
+        if (!this.isLeft)
         {
-            context.ContentWriter.WriteFloatAsString(PositionUtils.LeftEdgeOffset(aspectRatio));
-            context.ContentWriter.WriteUtf8Char('>');
-        }
-        else // right
-        {
-            context.ContentWriter.WriteFloatAsString(PositionUtils.RightEdgeOffset(aspectRatio));
-            context.ContentWriter.WriteUtf8Char('>');
-            context.ContentWriter.WriteUtf8Char('.');
+            context.ContentWriter.WriteChars("<size=0>.</size>");
         }
     }
 }

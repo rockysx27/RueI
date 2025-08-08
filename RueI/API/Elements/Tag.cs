@@ -3,11 +3,11 @@
 using System;
 
 /// <summary>
-/// Represents a unique identifier for an element within a <see cref="Display"/>. This class
+/// Represents a unique identifier for an element within a <see cref="RueDisplay"/>. This class
 /// cannot be inherited.
 /// </summary>
 /// <remarks>
-/// A <see cref="Display"/> can only have one element with a specific <see cref="Tag"/> at a time. If two <see cref="Tag"/>s are created with
+/// A <see cref="RueDisplay"/> can only have one element with a specific <see cref="Tag"/> at a time. If two <see cref="Tag"/>s are created with
 /// the same <see langword="string"/>, they are considered equal. You can use the <see cref="Tag()"/> constructor to create a tag that
 /// will only be equal to itself.
 /// </remarks>

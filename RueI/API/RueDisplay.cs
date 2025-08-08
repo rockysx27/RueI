@@ -14,7 +14,7 @@ using RueI.Utils.Collections;
 using UnityEngine;
 
 /// <summary>
-/// Represents a viewport for a specific player.
+/// Represents a display for a specific player.
 /// </summary>
 /// <remarks>
 /// Every player has a <see cref="RueDisplay"/>, which is used by RueI to keep track of their elements and send them hints.

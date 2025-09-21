@@ -158,7 +158,7 @@ public static class HintBuilding
     /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
     public static StringBuilder SetSize(this StringBuilder sb, float size, MeasurementUnit unit = MeasurementUnit.Pixels)
     {
-        return sb.AddMeasurementTag("cspace", size, unit);
+        return sb.AddMeasurementTag("size", size, unit);
     }
 
     /// <summary>
@@ -274,7 +274,7 @@ public static class HintBuilding
     /// <returns>A reference to the original <see cref="StringBuilder"/>.</returns>
     public static StringBuilder SetWidth(this StringBuilder sb, float offset, MeasurementUnit unit = MeasurementUnit.Pixels)
     {
-        return sb.AddMeasurementTag("space", offset, unit);
+        return sb.AddMeasurementTag("width", offset, unit);
     }
 
     /// <summary>

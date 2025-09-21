@@ -13,12 +13,15 @@
 		<RepositoryUrl>https://github.com/Ruemena/RueI</RepositoryUrl>
 		<PackageProjectUrl>https://github.com/Ruemena/RueI</PackageProjectUrl>
 		<PackageTags>scpsl;hints;scp;exiled;labapi</PackageTags>
+		<PackageVersion>3.0.0-alpha.3</PackageVersion>
 		<Version>3.0.0</Version>
 		<AssemblyVersion>3.0</AssemblyVersion> <!--only update for breaking changes-->
 		<FileVersion>3.0.0</FileVersion>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 		<PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackageReleaseNotes>complete rewrite</PackageReleaseNotes>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<Nullable>enable</Nullable>
@@ -45,5 +48,15 @@
 		<Reference Include="UnityEngine.CoreModule"><HintPath>$(SL_REFERENCES)/UnityEngine.CoreModule.dll</HintPath></Reference>
 		<!--alias as mscorlib so we can qualify certain classes like Stack and Queue-->
 		<Reference Include="mscorlib"><HintPath>$(SL_REFERENCES)/mscorlib.dll</HintPath><Aliases>global, mscorlib</Aliases></Reference>
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\LICENSE">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+		<None Include="..\README.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
 	</ItemGroup>
 </Project>

@@ -3,14 +3,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using LabApi.Events.Arguments.PlayerEvents;
+using LabApi.Events.Handlers;
 using LabApi.Features.Wrappers;
+using PlayerRoles.Spectating;
 using RoundRestarting;
 
 using RueI.API.Elements;
 using RueI.API.Parsing;
 using RueI.Utils.Collections;
-
+using RueI.Utils.Extensions;
 using UnityEngine;
 
 /// <summary>
@@ -28,6 +30,7 @@ public sealed class RueDisplay
     private readonly MinHeap<ExpiryInfo> expirationHeap = new(); // for when elements expire - smallest expires most recently
     private readonly MinHeap<TimeSpan> updateIntervalHeap = new(); // for dynamicelements, etc
     private readonly HashSet<Tag> hiddenTags = new();
+    private readonly HashSet<RueDisplay> spectators = new();
     private readonly ReferenceHub hub;
 
     private bool updateNextFrame = false;
@@ -91,7 +94,7 @@ public sealed class RueDisplay
     public void Show(Tag tag, Element element, float duration) => this.AddElement(
         tag ?? throw new ArgumentNullException(nameof(tag)),
         element ?? throw new ArgumentNullException(nameof(element)),
-        Time.time + duration);
+        Time.timeSinceLevelLoad + duration);
 
     /// <summary>
     /// Adds an <see cref="Element"/> to this <see cref="RueDisplay"/> for a certain duration.
@@ -105,7 +108,7 @@ public sealed class RueDisplay
     public void Show(Element element, float duration) => this.AddElement(
         new(), // new() results in a tag that is only equal to itself
         element ?? throw new ArgumentNullException(nameof(element)),
-        Time.time + duration);
+        Time.timeSinceLevelLoad + duration);
 
     /// <summary>
     /// Adds an <see cref="Element"/> with a unique <see cref="Tag"/> to this <see cref="RueDisplay"/> for a certain period of time.
@@ -198,6 +201,9 @@ public sealed class RueDisplay
         StaticUnityMethods.OnUpdate += CheckDisplays;
         ReferenceHub.OnPlayerRemoved += RemoveHub;
         RoundRestart.OnRestartTriggered += Displays.Clear;
+
+        PlayerEvents.ChangedSpectator += OnSpectatorChanged;
+        PlayerEvents.ChangedRole += OnRoleChanged;
     }
 
     /// <summary>
@@ -208,6 +214,9 @@ public sealed class RueDisplay
         StaticUnityMethods.OnUpdate -= CheckDisplays;
         ReferenceHub.OnPlayerRemoved -= RemoveHub;
         RoundRestart.OnRestartTriggered -= Displays.Clear;
+
+        PlayerEvents.ChangedSpectator -= OnSpectatorChanged;
+        PlayerEvents.ChangedRole -= OnRoleChanged;
     }
 
     /// <summary>
@@ -216,16 +225,48 @@ public sealed class RueDisplay
     /// <param name="duration">The time to wait before updating.</param>
     internal void SetUpdateIn(float duration)
     {
-        this.forcedUpdate = Time.time + duration;
+        this.forcedUpdate = Time.timeSinceLevelLoad + duration;
         this.forcedIsExternal = true;
     }
 
     // not a lambda so we can later unregister
     private static void RemoveHub(ReferenceHub hub) => Displays.Remove(hub);
 
+    private static void OnRoleChanged(PlayerChangedRoleEventArgs ev)
+    {
+        if (ev.NewRole is not ISpectatableRole)
+        {
+            RueDisplay display = RueDisplay.Get(ev.Player);
+
+            foreach (RueDisplay spectator in display.spectators)
+            {
+                spectator.updateNextFrame = true;
+            }
+
+            display.spectators.Clear();
+        }
+    }
+
+    private static void OnSpectatorChanged(PlayerChangedSpectatorEventArgs ev)
+    {
+        RueDisplay display = Get(ev.Player);
+
+        if (ev.OldTarget != null)
+        {
+            Get(ev.OldTarget).spectators.Remove(display);
+        }
+
+        if (ev.NewTarget != null)
+        {
+            Get(ev.NewTarget).spectators.Add(display);
+        }
+
+        display.Update();
+    }
+
     private static void CheckDisplays()
     {
-        float time = Time.time;
+        float time = Time.timeSinceLevelLoad;
 
         foreach (RueDisplay display in Displays.Values)
         {
@@ -238,10 +279,7 @@ public sealed class RueDisplay
 
             while (display.expirationHeap.TryPeek(out var node) && node.Value.ExpiresAt < time)
             {
-                display.expirationHeap.Pop();
-                display.elements.Remove(node.Value.Tag);
-
-                display.updateNextFrame = true;
+                display.Remove(node.Value.Tag);
             }
 
             if (display.updateNextFrame)
@@ -250,7 +288,7 @@ public sealed class RueDisplay
 
                 if (display.updateIntervalHeap.TryPeek(out var interval))
                 {
-                    display.forcedUpdate = (float)interval.Value.TotalSeconds + Time.time;
+                    display.forcedUpdate = (float)interval.Value.TotalSeconds + Time.timeSinceLevelLoad;
                     display.forcedIsExternal = true;
                 }
                 else
@@ -292,7 +330,24 @@ public sealed class RueDisplay
         // set BEFORE so that if ElementCombiner.Combine throws an exception we don't get error spam
         this.updateNextFrame = false;
 
-        ElementCombiner.Combine(this.hub, this.elements.Where(x => !this.hiddenTags.Contains(x.Key)).Select(x => x.Value.Element)); // we don't use this.elements.Values, since that boxes (no way around it)
+        foreach (RueDisplay display in this.spectators)
+        {
+            display.updateNextFrame = true;
+        }
+
+        var stored = this.elements.Where(x => !this.hiddenTags.Contains(x.Key)).Select(x => x.Value);
+
+        if (this.hub.roleManager.CurrentRole is SpectatorRole spectator)
+        {
+            if (ReferenceHub.TryGetHubNetID(spectator.SyncedSpectatedNetId, out ReferenceHub hub))
+            {
+                RueDisplay display = Get(hub);
+
+                stored = stored.MergeAscending(display.elements.Where(x => !display.hiddenTags.Contains(x.Key) && x.Value.Element.ShowToSpectators).Select(x => x.Value));
+            }
+        }
+
+        ElementCombiner.Combine(this.hub, stored.Select(x => x.Element)); // we don't use this.elements.Values, since that boxes (no way around it)
     }
 
     /// <summary>

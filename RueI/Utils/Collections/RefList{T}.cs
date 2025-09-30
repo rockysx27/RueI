@@ -100,7 +100,7 @@ internal sealed class RefList<T>
             return;
         }
 
-        this.GrowTo(length);
+        this.AddCapacity(length);
 
         list.values.CopyTo(this.values, this.Count);
         this.Count += length;
@@ -131,14 +131,7 @@ internal sealed class RefList<T>
     {
         if (this.Capacity + this.Count < capacity)
         {
-            int newCapacity = this.Capacity * 2;
-
-            if (newCapacity < capacity)
-            {
-                newCapacity = capacity;
-            }
-
-            Array.Resize(ref this.values, newCapacity);
+            Array.Resize(ref this.values, Math.Max(this.Capacity * 2, capacity));
         }
     }
 }

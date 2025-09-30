@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 
 using global::Utils.Networking;
-using LabApi.Features.Console;
 using Mirror;
 
 using RueI.API.Elements.Parameters;
@@ -76,6 +75,7 @@ internal sealed class ParameterHandler
         foreach (ContentParameter parameter in list)
         {
             this.writer.WriteByte((byte)parameter.HintParameterType);
+
             parameter.Write(this.writer);
         }
 

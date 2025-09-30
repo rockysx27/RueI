@@ -34,9 +34,9 @@ internal class CachedElement : DynamicElement
     /// <inheritdoc/>
     protected internal override ParsedData GetParsedData(ReferenceHub hub)
     {
-        if (this.expireCacheAt < Time.time)
+        if (this.expireCacheAt < Time.timeSinceLevelLoad)
         {
-            this.expireCacheAt = (float)this.CacheTime.TotalSeconds + Time.time;
+            this.expireCacheAt = (float)this.CacheTime.TotalSeconds + Time.timeSinceLevelLoad;
 
             return this.cachedParsedData = Parser.Parse(this.ContentGetter(hub), this);
         }

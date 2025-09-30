@@ -159,7 +159,7 @@ public readonly struct AnimatedValue : IEnumerable<Keyframe>
         writer.WriteByte((byte)(length - 2));
 
         int i = 0;
-        while (i < this.frames.Count)
+        while (i < length)
         {
             byte flag = 0;
             byte offset = 0;
@@ -176,7 +176,7 @@ public readonly struct AnimatedValue : IEnumerable<Keyframe>
 
         for (int j = 0; j < length; j++)
         {
-            NetworkKeyframe networkFrame = this.frames[i];
+            NetworkKeyframe networkFrame = this.frames[j];
             Keyframe frame = networkFrame.Keyframe;
 
             writer.WriteFloat(frame.time);

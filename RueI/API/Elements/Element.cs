@@ -37,9 +37,11 @@ public abstract class Element
     public float VerticalPosition { get; }
 
     /// <summary>
-    /// Gets a value indicating whether align tags will align to the very edge of the screen, based on the resolution.
+    /// Gets or initializes a value indicating whether align tags will align to the very edge of the screen, based on the resolution.
     /// </summary>
+#pragma warning disable SA1623 // Property summary documentation should match accessors (support for "initializes")
     public bool ResolutionBasedAlign { get; init; } = false;
+#pragma warning disable SA1623 // Property summary documentation should match accessors (support for "initializes")
 
     /// <summary>
     /// Gets or initializes the behavior of <c>noparse</c> tags in the <see cref="Element"/>.
@@ -56,7 +58,8 @@ public abstract class Element
     /// Gets or initializes an animated override for the vertical position.
     /// </summary>
     /// <remarks>
-    /// If not <see langword="null"/>, <see cref="VerticalPosition"/> will be ignored.
+    /// If not <see langword="null"/>, <see cref="VerticalPosition"/> will be ignored. Currently, only one animated position per player is
+    /// supported.
     /// </remarks>
     public AnimatedValue? AnimatedPosition { get; init; } = null;
 
@@ -67,6 +70,18 @@ public abstract class Element
     /// The default behavior is <see cref="VerticalAlign.Down"/>.
     /// </remarks>
     public VerticalAlign VerticalAlign { get; init; } = VerticalAlign.Down;
+
+    /// <summary>
+    /// Gets or initializes a value indicating whether spectators should see this hint.
+    /// </summary>
+    /// <remarks>
+    /// If a <see cref="DynamicElement"/> has this value set to <see langword="true"/>, the
+    /// <see cref="DynamicElement.ContentGetter"/> function will not be called with the spectated player if it
+    /// the specator's <see cref="Display"/> is updated; instead, it will be called with the specator.
+    /// </remarks>
+#pragma warning disable SA1623 // Property summary documentation should match accessors (support for "initializes")
+    public bool ShowToSpectators { get; init; } = false;
+#pragma warning restore SA1623 // Property summary documentation should match accessors (support for "initializes")
 
     /// <summary>
     /// Gets or initializes the priority of the hint. A higher value indicates that the hint will show above another hint.

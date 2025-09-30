@@ -43,6 +43,7 @@
 		<Reference Include="Assembly-CSharp-firstpass"><HintPath>$(SL_REFERENCES)/Assembly-CSharp-firstpass.dll</HintPath></Reference>
 		<Reference Include="Mirror"><HintPath>$(SL_REFERENCES)/Mirror.dll</HintPath></Reference>
 		<Reference Include="NorthwoodLib"><HintPath>$(SL_REFERENCES)/NorthwoodLib.dll</HintPath></Reference>
+		<Reference Include="Pooling"><HintPath>$(SL_REFERENCES)/Pooling.dll</HintPath></Reference>
 		<Reference Include="System.Runtime.CompilerServices.Unsafe"><HintPath>$(SL_REFERENCES)/System.Runtime.CompilerServices.Unsafe.dll</HintPath></Reference>
 		<Reference Include="UnityEngine"><HintPath>$(SL_REFERENCES)/UnityEngine.dll</HintPath></Reference>
 		<Reference Include="UnityEngine.CoreModule"><HintPath>$(SL_REFERENCES)/UnityEngine.CoreModule.dll</HintPath></Reference>

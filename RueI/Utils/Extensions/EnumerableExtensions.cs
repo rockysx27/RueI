@@ -1,5 +1,6 @@
 ﻿namespace RueI.Utils.Extensions;
 
+using System;
 using System.Collections.Generic;
 
 /// <summary>
@@ -31,5 +32,51 @@ internal static class EnumerableExtensions
         value = default!;
 
         return false;
+    }
+
+    /// <summary>
+    /// Merges two sorted <see cref="IEnumerable{T}"/>s in ascending order.
+    /// </summary>
+    /// <typeparam name="T">The type to compare.</typeparam>
+    /// <param name="first">The first sorted <see cref="IEnumerable{T}"/>.</param>
+    /// <param name="second">The second sorted <see cref="IEnumerable{T}"/>.</param>
+    /// <returns>An <see cref="IEnumerable{T}"/> that contains all of the elements, in order.</returns>
+    /// <remarks>
+    /// In case two elements are equal, the value from <paramref name="first"/> will come first.
+    /// </remarks>
+    public static IEnumerable<T> MergeAscending<T>(this IEnumerable<T> first, IEnumerable<T> second)
+        where T : IComparable<T>
+    {
+        using var firstEnumerator = first.GetEnumerator();
+        using var secondEnumerator = second.GetEnumerator();
+
+        bool hasFirst = firstEnumerator.MoveNext();
+        bool hasSecond = secondEnumerator.MoveNext();
+
+        while (hasFirst && hasSecond)
+        {
+            if (firstEnumerator.Current.CompareTo(secondEnumerator.Current) <= 0)
+            {
+                yield return firstEnumerator.Current;
+                hasFirst = firstEnumerator.MoveNext();
+            }
+            else
+            {
+                yield return secondEnumerator.Current;
+                hasSecond = secondEnumerator.MoveNext();
+            }
+        }
+
+        while (hasFirst)
+        {
+            yield return firstEnumerator.Current;
+            hasFirst = firstEnumerator.MoveNext();
+        }
+
+        while (hasSecond)
+        {
+            yield return secondEnumerator.Current;
+            hasSecond = secondEnumerator.MoveNext();
+        }
     }
 }

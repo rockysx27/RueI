@@ -1,7 +1,6 @@
 ﻿namespace RueI.API.Parsing;
 
 using System.Collections.Generic;
-
 using Mirror;
 using RueI.API.Parsing.Structs;
 using RueI.Utils;

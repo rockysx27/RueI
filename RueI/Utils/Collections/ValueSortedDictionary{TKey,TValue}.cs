@@ -19,13 +19,13 @@ using System.Diagnostics.CodeAnalysis;
 internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     where TValue : IComparable<TValue>
 {
-    private readonly Dictionary<TKey, LinkedListNode<TValue>> dictionary = new();
+    private readonly Dictionary<TKey, LinkedListNode<KeyValuePair<TKey, TValue>>> dictionary = new();
 
     // SortedSet is technically an option to use here, but it doesn't allow duplicates,
-    // doesn't allow for arbitrary O(1) removals by storing nodes. we could use a custom
+    // and doesn't allow for arbitrary O(1) removals by storing nodes. we could use a custom
     // tree implementation, but that is likely overkill when we would expect maybe 10 values
     // at max, and would not offer the same iteration speed as a LinkedList.
-    private readonly LinkedList<TValue> linkedList = new();
+    private readonly LinkedList<KeyValuePair<TKey, TValue>> linkedList = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ValueSortedDictionary{TKey, TValue}"/> class.
@@ -49,7 +49,7 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
     /// <inheritdoc/>
     public TValue this[TKey key]
     {
-        get => this.dictionary[key].Value;
+        get => this.dictionary[key].Value.Value;
 
         set
         {
@@ -119,9 +119,9 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
     {
         if (this.dictionary.Remove(key, out var node))
         {
-            value = node.Value;
+            value = node.Value.Value;
 
-            this.linkedList.Remove(value);
+            this.linkedList.Remove(node);
 
             return true;
         }
@@ -133,9 +133,9 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
     /// <inheritdoc/>
     public bool TryGetValue(TKey key, [NotNullWhen(true)] out TValue value)
     {
-        if (this.dictionary.TryGetValue(key, out LinkedListNode<TValue> node))
+        if (this.dictionary.TryGetValue(key, out var node))
         {
-            value = node.Value;
+            value = node.Value.Value;
 
             return true;
         }
@@ -145,20 +145,25 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
     }
 
     /// <inheritdoc/>
-    public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
-    {
-        return new EnumeratorAdapter<KeyValuePair<TKey, LinkedListNode<TValue>>, KeyValuePair<TKey, TValue>>(this.dictionary.GetEnumerator(), x => new(x.Key, x.Value.Value));
-    }
+    IEnumerator<KeyValuePair<TKey, TValue>> IEnumerable<KeyValuePair<TKey, TValue>>.GetEnumerator() => this.linkedList.GetEnumerator();
 
     /// <inheritdoc/>
     IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
+
+    /// <summary>
+    /// Gets the enumerator for the <see cref="ValueSortedDictionary{TKey, TValue}"/>.
+    /// </summary>
+    /// <returns>Note that this method does not allocate.</returns>
+    public LinkedList<KeyValuePair<TKey, TValue>>.Enumerator GetEnumerator() => this.linkedList.GetEnumerator();
 
     /// <summary>
     /// Adds a <typeparamref name="TKey"/> and <typeparamref name="TValue"/> without a check.
     /// </summary>
     private void Insert(TKey key, TValue value)
     {
-        LinkedListNode<TValue> valueNode;
+        LinkedListNode<KeyValuePair<TKey, TValue>> valueNode;
+
+        var kv = KeyValuePair.Create(key, value);
 
         // because we add nodes AFTER all equal nodes, it is more efficient to
         // iterate backwards (so we don't have to enumerate through the nodes
@@ -166,15 +171,15 @@ internal sealed class ValueSortedDictionary<TKey, TValue> : IDictionary<TKey, TV
         for (var node = this.linkedList.Last; node != null; node = node.Previous)
         {
             // greater than or equal to 0 = comes before / same sort order
-            if (value.CompareTo(node.Value) >= 0)
+            if (value.CompareTo(node.Value.Value) >= 0)
             {
-                valueNode = this.linkedList.AddAfter(node, value);
+                valueNode = this.linkedList.AddAfter(node, kv);
 
                 goto SkipAddLast;
             }
         }
 
-        valueNode = this.linkedList.AddLast(value);
+        valueNode = this.linkedList.AddLast(kv);
 
     SkipAddLast:
         this.dictionary[key] = valueNode;

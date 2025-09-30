@@ -3,6 +3,18 @@ RueI is a hint framework, designed to be the definitive way to display multiple 
 
 if you want to develop using RueI, make sure you install the [nuget package](https://www.nuget.org/packages/RueI)
 
+### Example
+```cs
+RueDisplay display = RueDisplay.Get(player);
+Tag welcomeTag = new();
+display.Show(welcomeTag, new BasicElement(800, "Welcome to the server!"));
+display.Show(new BasicElement(300, "Don't forget to read the rules!"), 10f);
+Timing.CallDelayed(5f, () =>
+{
+    display.Show(welcomeTag, new BasicElement(800, "New update: We added support for multiple hints at once!"), 10f);
+});
+```
+
 ### Features
 - support for displaying multiple hints at once without them interfering with eachother
 - allows using hint parameters 

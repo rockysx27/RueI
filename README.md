@@ -3,6 +3,10 @@ RueI is a hint framework, designed to be the definitive way to display multiple 
 
 if you want to develop using RueI, make sure you install the [nuget package](https://www.nuget.org/packages/RueI)
 
+### Installation
+RueI is a LabAPI plugin, although it works with EXILED plugins, too. simply download the [latest release](https://github.com/Ruemena/RueI/releases/latest), then
+put it in your plugin folder.
+
 ### Example
 ```cs
 RueDisplay display = RueDisplay.Get(player);

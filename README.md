@@ -5,7 +5,8 @@ if you want to develop using RueI, make sure you install the [nuget package](htt
 
 ### Installation
 RueI is a LabAPI plugin, although it works with EXILED plugins, too. simply download the [latest release](https://github.com/Ruemena/RueI/releases/latest), then
-put it in your plugin folder.
+put it in your plugin folder. RueI also requires Harmony 2.2.2 and above: you can download that [here](https://github.com/pardeike/Harmony/releases).
+
 
 ### Example
 ```cs

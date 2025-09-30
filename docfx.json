@@ -1,0 +1,55 @@
+{
+  "metadata": [
+    {
+      "allowCompilationErrors": true,
+      "src": [
+        {
+          "src": "./",
+          "files": [
+            "RueI/RueI.csproj"
+          ]
+        }
+      ],
+      "dest": "api"
+    }
+  ],
+  "build": {
+    "postProcessors": ["ExtractSearchIndex", "RueIDocFX"],
+    "overwrite" : [
+      {
+        "files": [
+          "markdown/namespaces/**.md"
+        ]
+      }
+    ],
+    "content": [
+      {
+        "files": [
+          "**/*.{md,yml}"
+        ],
+        "exclude": [
+          "_site/**",
+          "markdown/namespaces/**.md"
+        ]
+      }
+    ],
+    "resources": [
+      {
+        "files": [
+          "images/**"
+        ]
+      }
+    ],
+    "template": [
+      "default",
+      "modern"
+    ],
+    "output": "_site",
+    "globalMetadata": {
+      "_appName": "RueI",
+      "_appTitle": "RueI",
+      "_enableSearch": true,
+      "pdf": false
+    }
+  }
+}

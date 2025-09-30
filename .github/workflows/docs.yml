@@ -1,0 +1,61 @@
+name: Clean up and deploy docs
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Cleanup prior deployments
+    runs-on: ubuntu-latest
+    permissions: write-all
+
+    steps:
+      - name: Delete deployments
+        uses: strumwolf/delete-deployment-environment@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: github-pages
+          onlyRemoveDeployments: true
+          
+  docs:
+    needs: cleanup
+    permissions:
+      contents: 'write'
+      pages: 'write'
+      id-token: 'write'
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+      
+    runs-on: ubuntu-latest
+    name: Generate and publish the docs
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      
+    - name: Dotnet Setup
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.x
+
+    - run: dotnet tool update -g docfx
+      
+    - name: List contents of folder
+      run: ls -R -a /home/runner/.dotnet/tools/.store/docfx/
+      
+    - run: docfx docfx.json
+        
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      env:
+          GITHUB_TOKEN: ${{ secrets.ACCESSTOKEN }}
+      with:
+        github_token: ${{ secrets.ACCESSTOKEN }}
+        publish_dir: _site

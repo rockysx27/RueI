@@ -1,12 +1,12 @@
 # RueI
-RueI is a hint framework, designed to be the definitive way to display multiple hints at once. you can get the latest release [here](https://github.com/Ruemena/RueI/releases/latest).
+RueI is a hint framework, designed to be the definitive way to display multiple hints at once. you can get the latest release [here](https://github.com/pawslee/RueI/releases/latest).
 
 if you want to develop using RueI, make sure you install the [nuget package](https://www.nuget.org/packages/RueI)
 
 RueI also has a [website with documentation](https://pawslee.github.io/RueI/).
 
 ### Installation
-RueI is a LabAPI plugin, although it works with EXILED plugins, too. simply download the [latest release](https://github.com/Ruemena/RueI/releases/latest), then
+RueI is a LabAPI plugin, although it works with EXILED plugins, too. simply download the [latest release](https://github.com/pawslee/RueI/releases/latest), then
 put it in your plugin folder. RueI also requires Harmony 2.2.2 and above: you can download that [here](https://github.com/pardeike/Harmony/releases).
 
 
@@ -31,4 +31,4 @@ Timing.CallDelayed(5f, () =>
 
 RueI is not a grid-based or line-based system, it calculates the offset necessary to put a hint at the same position no matter what
 ## Comments
-if you've encountered any bugs please [make an issue](https://github.com/paislee/RueI/issues) (it helps me out a ton)
+if you've encountered any bugs please [make an issue](https://github.com/pawslee/RueI/issues) (it helps me out a ton)

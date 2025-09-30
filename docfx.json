@@ -14,7 +14,7 @@
     }
   ],
   "build": {
-    "postProcessors": ["ExtractSearchIndex", "RueIDocFX"],
+    "postProcessors": ["ExtractSearchIndex"],
     "overwrite" : [
       {
         "files": [

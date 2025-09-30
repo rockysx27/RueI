@@ -3,6 +3,8 @@ RueI is a hint framework, designed to be the definitive way to display multiple 
 
 if you want to develop using RueI, make sure you install the [nuget package](https://www.nuget.org/packages/RueI)
 
+RueI also has a [website with documentation](https://pawslee.github.io/RueI/).
+
 ### Installation
 RueI is a LabAPI plugin, although it works with EXILED plugins, too. simply download the [latest release](https://github.com/Ruemena/RueI/releases/latest), then
 put it in your plugin folder. RueI also requires Harmony 2.2.2 and above: you can download that [here](https://github.com/pardeike/Harmony/releases).

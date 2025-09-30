@@ -17,7 +17,7 @@ public class KeybindParameter : FormattableParameter
     /// </summary>
     /// <param name="id">The ID of the server-setting parameter.</param>
     /// <param name="format">The format to use.</param>
-    public KeybindParameter(int id, string format = "[{0}]")
+    public KeybindParameter(int id, string format = "{0}")
         : base(format)
     {
         this.Id = id;

@@ -9,7 +9,7 @@ using UnityEngine;
 /// <summary>
 /// Represents a <see cref="DynamicElement"/> that caches text for a certain period of time.
 /// </summary>
-internal class CachedElement : DynamicElement
+public class CachedElement : DynamicElement
 {
     private float expireCacheAt = float.NegativeInfinity;
     private ParsedData cachedParsedData;

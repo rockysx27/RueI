@@ -8,7 +8,7 @@ using UnityEngine;
 /// <summary>
 /// Provides utilities for working with <see cref="Element"/> positions.
 /// </summary>
-public class PositionUtils
+public static class PositionUtils
 {
     private const float BaselineAddend = 755f;
     private const float BaselineMultiplier = -2.14f;

@@ -13,16 +13,16 @@
 		<RepositoryUrl>https://github.com/Ruemena/RueI</RepositoryUrl>
 		<PackageProjectUrl>https://github.com/Ruemena/RueI</PackageProjectUrl>
 		<PackageTags>scpsl;hints;scp;exiled;labapi</PackageTags>
-		<PackageVersion>3.0.0-alpha.3</PackageVersion>
-		<Version>3.0.0</Version>
-		<AssemblyVersion>3.0</AssemblyVersion> <!--only update for breaking changes-->
-		<FileVersion>3.0.0</FileVersion>
+		<PackageVersion>3.1.0</PackageVersion>
+		<Version>3.1.0</Version>
+		<AssemblyVersion>3.1</AssemblyVersion> <!--only update for breaking changes-->
+		<FileVersion>3.1.0</FileVersion>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 		<PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
 		<GenerateDocumentationFile>True</GenerateDocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-		<PackageReleaseNotes>complete rewrite</PackageReleaseNotes>
+		<PackageReleaseNotes>post-release bug fixes</PackageReleaseNotes>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>

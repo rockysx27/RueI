@@ -13,16 +13,16 @@
 		<RepositoryUrl>https://github.com/Ruemena/RueI</RepositoryUrl>
 		<PackageProjectUrl>https://github.com/Ruemena/RueI</PackageProjectUrl>
 		<PackageTags>scpsl;hints;scp;exiled;labapi</PackageTags>
-		<PackageVersion>3.1.0</PackageVersion>
-		<Version>3.1.0</Version>
+		<PackageVersion>3.1.1</PackageVersion>
+		<Version>3.1.1</Version>
 		<AssemblyVersion>3.1</AssemblyVersion> <!--only update for breaking changes-->
-		<FileVersion>3.1.0</FileVersion>
+		<FileVersion>3.1.1</FileVersion>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 		<PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
 		<GenerateDocumentationFile>True</GenerateDocumentationFile>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-		<PackageReleaseNotes>post-release bug fixes</PackageReleaseNotes>
+		<PackageReleaseNotes>fix a bug with DynamicElement</PackageReleaseNotes>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>

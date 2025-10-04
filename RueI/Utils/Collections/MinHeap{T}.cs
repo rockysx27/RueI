@@ -157,7 +157,7 @@ internal class MinHeap<T>
         this.SwapNodes(index, last);
         this.heap.RemoveAt(last);
 
-        if (this.Count != 0)
+        if (this.Count > 1)
         {
             this.HeapifyDown(index);
             this.HeapifyUp(index);

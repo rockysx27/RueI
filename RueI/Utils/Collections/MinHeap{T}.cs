@@ -160,7 +160,6 @@ internal class MinHeap<T>
         if (this.Count > 1)
         {
             this.HeapifyDown(index);
-            this.HeapifyUp(index);
         }
     }
 

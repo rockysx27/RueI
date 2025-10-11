@@ -301,6 +301,8 @@ public sealed class RueDisplay
 
     private void AddElement(Tag tag, Element element, float expireAt)
     {
+        this.Remove(tag);
+
         StoredElement storedElement = new()
         {
             Element = element,
